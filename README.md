@@ -1,1 +1,1 @@
-# spell-checker
+# Practicing NLP with a spell checker
