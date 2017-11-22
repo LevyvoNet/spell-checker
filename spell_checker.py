@@ -1,3 +1,8 @@
+import itertools
+from collections import namedtuple
+from numpy import log
+
+Edit = namedtuple('Edit', ['error', 'type'], verbose=False)
 
 
 def learn_language_model(files, n=3, lm=None):
@@ -35,10 +40,11 @@ def learn_language_model(files, n=3, lm=None):
 
     return ngrams
 
+
 def create_error_distribution(errors_file, lexicon):
     """ Returns a dictionary {str:dict} where str is in:
-    <'deletion', 'insertion', 'transposition', 'substitution'> and the inner dict {tupple: float} represents the confution matrix of the specific errors
-    where tupple is (err, corr) and the float is the probability of such an error. Examples of such tupples are ('t', 's'), ('-', 't') and ('ac','ca').
+    <'deletion', 'insertion', 'transposition', 'substitution'> and the inner dict {tuple: float} represents the confution matrix of the specific errors
+    where tuple is (err, corr) and the float is the probability of such an error. Examples of such tuples are ('t', 's'), ('-', 't') and ('ac','ca').
     Notes:
         1. The error distributions could be represented in more efficient ways.
            We ask you to keep it simpel and straight forward for clarity.
@@ -56,6 +62,7 @@ def create_error_distribution(errors_file, lexicon):
 
     """
 
+
 def generate_text(lm, m=15, w=None):
     """ Returns a text of the specified length, generated according to the
      specified language model using the specified word (if given) as an anchor.
@@ -70,8 +77,98 @@ def generate_text(lm, m=15, w=None):
     """
 
 
-        lm:=language model, m:=length of generated text
-evaluate_text(s,lm)   s=sentence, lm language model
+def damerau_levenshtein_and_edits(w, s):
+    """Calculate Damerau-Levenshtein distance between two strings edit series from one to the other.
+
+    Args:
+        w(string): a word.
+        s(string): another word.
+
+    Returns:
+        tuple. (distance, edits) while distance is the edit distance between the two
+            strings (number) and edits is a list contains Edit represents the
+            edits from w to s.
+    """
+
+    def nice_print_d(d):
+        two_dim_arr = [[d[(i, j)] for i in range(len(w) + 1)] for j in range(len(s) + 1)]
+        import ipdb
+        ipdb.set_trace()
+        # two_dim_arr = [[i - 1 for i in range(len(w) + 1)]] + two_dim_arr
+        # for i in range(len(s) + 1):
+        #     two_dim_arr[i] = [i - 1] + two_dim_arr[i]
+
+        import numpy as np
+        print(np.matrix(two_dim_arr))
+
+    ALPHABET = 'abcdefghijklmnopqrstuvwxyz'
+    da = {x: 0 for x in ALPHABET}
+    max_dist = len(w) + len(s)
+
+    Distance = namedtuple('Distance', ['price', 'edits'], verbose=False)
+    # initialize the dynamic programming matrix.
+    d = {(i, j): Distance(Distance(-100, []), [])
+         for i in range(-1, len(w) + 1)
+         for j in range(-1, len(s) + 1)}
+
+    d[(-1, -1)] = Distance(max_dist, [])
+
+    for i in range(len(w) + 1):
+        d[(i, -1)] = Distance(max_dist, [])
+        edit = d[i - 1, 0].edits + [Edit(('-', w[i - 1]), 'deletion')] if i != 0 else []
+        d[(i, 0)] = Distance(i, edit)
+
+    for j in range(len(s) + 1):
+        d[(-1, j)] = Distance(max_dist, [])
+        edit = d[0, j - 1].edits + [Edit((s[j - 1], '-'), 'insertion')] if j != 0 else []
+        d[(0, j)] = Distance(j, edit)
+
+    nice_print_d(d)
+
+    for i in range(len(w) + 1)[1:]:
+        db = 0
+        for j in range(len(s) + 1)[1:]:
+            k = da[s[j - 1]]
+            l = db
+            if w[i - 1] == s[j - 1]:
+                cost = 0
+                db = j
+            else:
+                cost = 1
+
+            min_price = min([
+                d[i - 1, j - 1].price + cost,  # substitution
+                d[i, j - 1].price + 1,  # insertion
+                d[i - 1, j].price + 1,  # deletion
+                d[k - 1, l - 1].price + (i - k - 1) + 1 + (j - l - 1)  # transposition
+            ])
+            d[(i, j)] = Distance(min_price, [])
+
+        da[w[i - 1]] = i
+
+    return d[(len(w), len(s))]
+
+
+def generate_candidates(w, d):
+    """Generate candidates for a word correction and their matching edits.
+
+    Args:
+        w(string): the misspelled word.
+        d(list): dictionary contains all of the words.
+
+    Returns:
+        tuple. (candidates, edits) tuples contains the
+            candidate words (list) and their edits from given misspelled word w
+            (list of tuples represents edits).
+    """
+    candidates, edits = [], []
+    for can in d:
+        edit_distance, edits = damerau_levenshtein_and_edits(w, can)
+        if edit_distance <= 2:
+            candidates.append(can)
+            edits.append(edits)
+
+    return candidates, edits
 
 
 def correct_word(w, word_counts, errors_dist):
@@ -90,25 +187,44 @@ def correct_word(w, word_counts, errors_dist):
         The most probable correction (str).
     """
 
+    def prior(can):
+        return float(word_counts[can]) / len(word_counts.keys())
 
-def correct_sentence(s, lm, err_dist,c=2, alpha=0.95):
-""" Returns the most probable sentence given the specified sentence, language
-model, error distributions, maximal number of suumed erroneous tokens and likelihood for non-error.
+    def channel(edit):
+        return errors_dist[edit.type][edit.error]
 
-Args:
-    s (str): the sentence to correct.
-    lm (dict): the language model to correct the sentence accordingly.
-    err_dist (dict): error distributions according to error types
-                    (as returned by create_error_distribution() ).
-    c (int): the maximal number of tokens to change in the specified sentence.
-             (default: 2)
-    alpha (float): the likelihood of a lexical entry to be the a correct word.
-                    (default: 0.95)
+    def channel_multi_edits(edits):
+        return reduce(lambda x, y: x * y, [channel(edit) for edit in edits], 1)
 
-Returns:
-    The most probable sentence (str)
+    def candidate_prob(can, edits):
+        return log(prior(can)) + log(channel_multi_edits(edits))
 
-"""
+    can_probs = {
+        can: candidate_prob(can, edits)
+        for can, edits in itertools.izip(generate_candidates(w, word_counts.keys()))
+    }
+    return max(can_probs.iterkeys(), key=lambda c: can_probs[c])
+
+
+def correct_sentence(s, lm, err_dist, c=2, alpha=0.95):
+    """ Returns the most probable sentence given the specified sentence, language
+    model, error distributions, maximal number of suumed erroneous tokens and likelihood for non-error.
+
+    Args:
+        s (str): the sentence to correct.
+        lm (dict): the language model to correct the sentence accordingly.
+        err_dist (dict): error distributions according to error types
+                        (as returned by create_error_distribution() ).
+        c (int): the maximal number of tokens to change in the specified sentence.
+                 (default: 2)
+        alpha (float): the likelihood of a lexical entry to be the a correct word.
+                        (default: 0.95)
+
+    Returns:
+        The most probable sentence (str)
+
+    """
+
 
 def evaluate_text(s, n, lm):
     """ Returns the likelihood of the specified sentence to be generated by the
