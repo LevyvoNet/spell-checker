@@ -2,7 +2,23 @@ import itertools
 from collections import namedtuple
 from numpy import log
 
-Edit = namedtuple('Edit', ['error', 'type'], verbose=False)
+ALPHABET = 'abcdefghijklmnopqrstuvwxyz'
+
+
+class Edit(namedtuple('Edit', ['error', 'type'], verbose=False)):
+    def __str__(self):
+        return '{}'.format(self.error)
+
+    def __repr__(self):
+        return str(self)
+
+
+class Distance(namedtuple('Distance', ['price', 'edits'], verbose=False)):
+    def __str__(self):
+        return '({},{})'.format(self.price, self.edits)
+
+    def __repr__(self):
+        return str(self)
 
 
 def learn_language_model(files, n=3, lm=None):
@@ -92,22 +108,19 @@ def damerau_levenshtein_and_edits(w, s):
 
     def nice_print_d(d):
         two_dim_arr = [[d[(i, j)] for i in range(len(w) + 1)] for j in range(len(s) + 1)]
-        import ipdb
-        ipdb.set_trace()
         # two_dim_arr = [[i - 1 for i in range(len(w) + 1)]] + two_dim_arr
         # for i in range(len(s) + 1):
         #     two_dim_arr[i] = [i - 1] + two_dim_arr[i]
 
-        import numpy as np
-        print(np.matrix(two_dim_arr))
+        for i in range(1, len(two_dim_arr)):
+            print two_dim_arr[i][1:]
 
-    ALPHABET = 'abcdefghijklmnopqrstuvwxyz'
-    da = {x: 0 for x in ALPHABET}
+    init_val = -100
     max_dist = len(w) + len(s)
+    da = {x: 0 for x in ALPHABET}
 
-    Distance = namedtuple('Distance', ['price', 'edits'], verbose=False)
     # initialize the dynamic programming matrix.
-    d = {(i, j): Distance(Distance(-100, []), [])
+    d = {(i, j): Distance(init_val, [])
          for i in range(-1, len(w) + 1)
          for j in range(-1, len(s) + 1)}
 
@@ -123,8 +136,6 @@ def damerau_levenshtein_and_edits(w, s):
         edit = d[0, j - 1].edits + [Edit((s[j - 1], '-'), 'insertion')] if j != 0 else []
         d[(0, j)] = Distance(j, edit)
 
-    nice_print_d(d)
-
     for i in range(len(w) + 1)[1:]:
         db = 0
         for j in range(len(s) + 1)[1:]:
@@ -136,16 +147,19 @@ def damerau_levenshtein_and_edits(w, s):
             else:
                 cost = 1
 
-            min_price = min([
-                d[i - 1, j - 1].price + cost,  # substitution
-                d[i, j - 1].price + 1,  # insertion
-                d[i - 1, j].price + 1,  # deletion
-                d[k - 1, l - 1].price + (i - k - 1) + 1 + (j - l - 1)  # transposition
-            ])
-            d[(i, j)] = Distance(min_price, [])
+            possible_edits_prices = {
+                Edit(('-', w[i]), 'deletion'): d[i - 1, j].price + 1,
+                Edit((s[j], '-'), 'insertion'): d[i, j - 1].price + 1,
+                Edit((s[j], w[i]), 'substitution'): d[i - 1, j - 1].price + cost,
+                Edit((), 'transposition'): d[k - 1, l - 1].price + (i - k - 1) + 1 + (j - l - 1)
+            }
+            best_edit = min(possible_edits_prices.iterkeys(), lambda e: possible_edits_prices[e])
+            print best_edit
+            d[(i, j)] = Distance(possible_edits_prices[best_edit], [])
 
         da[w[i - 1]] = i
 
+    nice_print_d(d)
     return d[(len(w), len(s))]
 
 
