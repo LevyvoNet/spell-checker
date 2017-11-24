@@ -1,2 +1,9 @@
 # ignore pycharm
 .idea/*
+
+# ignore notebook
+.ipynb_checkpoints/*
+*.ipynb
+
+# ignore .pyc files
+*.pyc

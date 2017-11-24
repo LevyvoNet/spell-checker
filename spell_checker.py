@@ -80,7 +80,8 @@ def create_error_distribution(errors_file, lexicon):
     """
     with open(errors_file, 'r') as erros:
         for err in erros:
-            
+            [misspelled_word, real_word] = err.split('->')
+            print 'misspelled:{}, real: {}'.format(misspelled_word, real_word)
 
 
 def generate_text(lm, m=15, w=None):
