@@ -1,4 +1,5 @@
 import itertools
+import functools
 from collections import namedtuple
 from numpy import log
 
@@ -7,7 +8,7 @@ ALPHABET = 'abcdefghijklmnopqrstuvwxyz'
 
 class Edit(namedtuple('Edit', ['error', 'type'], verbose=False)):
     def __str__(self):
-        return '{}'.format(self.error)
+        return '{}, {}'.format(self.error, self.type)
 
     def __repr__(self):
         return str(self)
@@ -77,6 +78,9 @@ def create_error_distribution(errors_file, lexicon):
         A dictionary of error distributions by error type (dict).
 
     """
+    with open(errors_file, 'r') as erros:
+        for err in erros:
+            
 
 
 def generate_text(lm, m=15, w=None):
@@ -93,79 +97,145 @@ def generate_text(lm, m=15, w=None):
     """
 
 
-def damerau_levenshtein_and_edits(w, s):
-    """Calculate Damerau-Levenshtein distance between two strings edit series from one to the other.
+def optimal_string_alignment(w, s):
+    """Calculate OSA distance between two strings and the edit series from one to the other.
 
     Args:
         w(string): a word.
         s(string): another word.
 
     Returns:
-        tuple. (distance, edits) while distance is the edit distance between the two
+        Distance. (price, edits) while price is the edit distance between the two
             strings (number) and edits is a list contains Edit represents the
             edits from w to s.
     """
+    # def nice_print_d(d):
+    #     two_dim_arr = [[d[(i, j)] for i in range(len(w) + 1)] for j in range(len(s) + 1)]
+    #     for i in range(1, len(two_dim_arr)):
+    #         print two_dim_arr[i][1:]
 
-    def nice_print_d(d):
-        two_dim_arr = [[d[(i, j)] for i in range(len(w) + 1)] for j in range(len(s) + 1)]
-        # two_dim_arr = [[i - 1 for i in range(len(w) + 1)]] + two_dim_arr
-        # for i in range(len(s) + 1):
-        #     two_dim_arr[i] = [i - 1] + two_dim_arr[i]
-
-        for i in range(1, len(two_dim_arr)):
-            print two_dim_arr[i][1:]
-
+    # arbitrary value to initialize the dynamic programming matrix, no cell should be left with this value
+    # in the end.
     init_val = -100
-    max_dist = len(w) + len(s)
-    da = {x: 0 for x in ALPHABET}
 
-    # initialize the dynamic programming matrix.
+    # Initialize a dictionary which represents the dynamic programming matrix.
     d = {(i, j): Distance(init_val, [])
          for i in range(-1, len(w) + 1)
          for j in range(-1, len(s) + 1)}
 
-    d[(-1, -1)] = Distance(max_dist, [])
-
+    # Initialize the first column of d with deletions.
     for i in range(len(w) + 1):
-        d[(i, -1)] = Distance(max_dist, [])
-        edit = d[i - 1, 0].edits + [Edit(('-', w[i - 1]), 'deletion')] if i != 0 else []
-        d[(i, 0)] = Distance(i, edit)
+        edit = d[i - 1, 0].edits + [Edit((w[i - 1], '-'), 'deletion')] if i != 0 else []
+        d[i, 0] = Distance(i, edit)
 
+    # Initialize the first row of d with insertions.
     for j in range(len(s) + 1):
-        d[(-1, j)] = Distance(max_dist, [])
-        edit = d[0, j - 1].edits + [Edit((s[j - 1], '-'), 'insertion')] if j != 0 else []
-        d[(0, j)] = Distance(j, edit)
+        edit = d[0, j - 1].edits + [Edit(('-', s[j - 1]), 'insertion')] if j != 0 else []
+        d[0, j] = Distance(j, edit)
 
     for i in range(len(w) + 1)[1:]:
-        db = 0
         for j in range(len(s) + 1)[1:]:
-            k = da[s[j - 1]]
-            l = db
-            if w[i - 1] == s[j - 1]:
-                cost = 0
-                db = j
-            else:
-                cost = 1
+            substitution_cost = 0 if w[i - 1] == s[j - 1] else 1
+
+            deletion = Edit((w[i - 1], '-'), 'deletion')
+            insertion = Edit(('-', s[j - 1]), 'insertion')
+            substitution = Edit((w[i - 1], s[j - 1]), 'substitution')
 
             possible_edits = {
-                Edit(('-', w[i - 1]), 'deletion'): Distance(d[i - 1, j].price + 1,
-                                                            d[i - 1, j].edits + [Edit(('-', w[i - 1]), 'deletion')]),
-                Edit((s[j - 1], '-'), 'insertion'): Distance(d[i, j - 1].price + 1,
-                                                             d[i, j - 1].edits + [Edit((s[j - 1], '-'), 'insertion')]),
-                Edit((s[j - 1], w[i - 1]), 'substitution'): Distance(d[i - 1, j - 1].price + cost,
-                                                                     d[i - 1, j - 1].edits + [
-                                                                         Edit((s[j - 1], w[i - 1]), 'substitution')]),
-                Edit((), 'transposition'): Distance(d[k - 1, l - 1].price + (i - k - 1) + 1 + (j - l - 1),
-                                                    d[i - 2, j - 2].edits + [
-                                                        Edit((s[j - 2] + s[j - 1], w[i - 2] + w[i - 1]),
-                                                             'transposition')])
+                deletion: Distance(d[i - 1, j].price + 1,
+                                   d[i - 1, j].edits + [deletion]),
+                insertion: Distance(d[i, j - 1].price + 1,
+                                    d[i, j - 1].edits + [insertion]),
+                substitution: Distance(d[i - 1, j - 1].price + substitution_cost,
+                                       d[i - 1, j - 1].edits + [substitution])
             }
-            best_edit = min(possible_edits.iterkeys(), key=lambda e: possible_edits[e].price)
-            d[(i, j)] = possible_edits[best_edit]
 
-            da[w[i - 1]] = i
+            if i > 1 and j > 1 and w[i - 1] == s[j - 2] and w[i - 2] == s[j - 1]:
+                transposition = Edit((w[i - 2] + w[i - 1], s[j - 2] + s[j - 1]), 'transposition')
+                possible_edits[transposition] = Distance(d[i - 2, j - 2].price + 1,
+                                                         d[i - 2, j - 2].edits + [transposition])
+
+            best_edit = min(possible_edits.iterkeys(), key=lambda e: possible_edits[e].price)
+            d[i, j] = possible_edits[best_edit]
 
     return d[(len(w), len(s))]
+
+
+# def damerau_levenshtein_and_edits(w, s):
+#     """Calculate Damerau-Levenshtein distance between two strings edit series from one to the other.
+#
+#     Args:
+#         w(string): a word.
+#         s(string): another word.
+#
+#     Returns:
+#         tuple. (distance, edits) while distance is the edit distance between the two
+#             strings (number) and edits is a list contains Edit represents the
+#             edits from s to w.
+#     """
+#
+#     def nice_print_d(d):
+#         two_dim_arr = [[d[(i, j)] for i in range(len(w) + 1)] for j in range(len(s) + 1)]
+#         # two_dim_arr = [[i - 1 for i in range(len(w) + 1)]] + two_dim_arr
+#         # for i in range(len(s) + 1):
+#         #     two_dim_arr[i] = [i - 1] + two_dim_arr[i]
+#
+#         for i in range(1, len(two_dim_arr)):
+#             print two_dim_arr[i][1:]
+#
+#     init_val = -100
+#     max_dist = len(w) + len(s)
+#     da = {x: 0 for x in ALPHABET}
+#
+#     # initialize the dynamic programming matrix.
+#     d = {(i, j): Distance(init_val, [])
+#          for i in range(-1, len(w) + 1)
+#          for j in range(-1, len(s) + 1)}
+#
+#     d[(-1, -1)] = Distance(max_dist, [])
+#
+#     for i in range(len(w) + 1):
+#         d[(i, -1)] = Distance(max_dist, [])
+#         edit = d[i - 1, 0].edits + [Edit(('-', w[i - 1]), 'deletion')] if i != 0 else []
+#         d[(i, 0)] = Distance(i, edit)
+#
+#     for j in range(len(s) + 1):
+#         d[(-1, j)] = Distance(max_dist, [])
+#         edit = d[0, j - 1].edits + [Edit((s[j - 1], '-'), 'insertion')] if j != 0 else []
+#         d[(0, j)] = Distance(j, edit)
+#
+#     for i in range(len(w) + 1)[1:]:
+#         db = 0
+#         for j in range(len(s) + 1)[1:]:
+#             k = da[s[j - 1]]
+#             l = db
+#             if w[i - 1] == s[j - 1]:
+#                 cost = 0
+#                 db = j
+#             else:
+#                 cost = 1
+#
+#             possible_edits = {
+#                 Edit(('-', w[i - 1]), 'deletion'): Distance(d[i - 1, j].price + 1,
+#                                                             d[i - 1, j].edits + [Edit(('-', w[i - 1]), 'deletion')]),
+#                 Edit((s[j - 1], '-'), 'insertion'): Distance(d[i, j - 1].price + 1,
+#                                                              d[i, j - 1].edits + [Edit((s[j - 1], '-'), 'insertion')]),
+#                 Edit((s[j - 1], w[i - 1]), 'substitution'): Distance(d[i - 1, j - 1].price + cost,
+#                                                                      d[i - 1, j - 1].edits + [
+#                                                                          Edit((s[j - 1], w[i - 1]), 'substitution')]),
+#                 Edit((s[j - 2] + s[j - 1], w[i - 2] + w[i - 1]), 'transposition'):
+#                     Distance(d[k - 1, l - 1].price + (i - k - 1) + 1 + (j - l - 1),
+#                              d[i - 2, j - 2].edits + [
+#                                  Edit((s[j - 2] + s[j - 1], w[i - 2] + w[i - 1]),
+#                                       'transposition')])
+#             }
+#             best_edit = min(possible_edits.iterkeys(), key=lambda e: possible_edits[e].price)
+#             d[(i, j)] = possible_edits[best_edit]
+#
+#             da[w[i - 1]] = i
+#
+#     nice_print_d(d)
+#     return d[(len(w), len(s))]
 
 
 def generate_candidates(w, d):
@@ -182,7 +252,7 @@ def generate_candidates(w, d):
     """
     candidates, edits = [], []
     for can in d:
-        edit_distance, edits = damerau_levenshtein_and_edits(w, can)
+        edit_distance, edits = optimal_string_alignment(can, w)
         if edit_distance <= 2:
             candidates.append(can)
             edits.append(edits)
