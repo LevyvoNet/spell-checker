@@ -147,19 +147,24 @@ def damerau_levenshtein_and_edits(w, s):
             else:
                 cost = 1
 
-            possible_edits_prices = {
-                Edit(('-', w[i]), 'deletion'): d[i - 1, j].price + 1,
-                Edit((s[j], '-'), 'insertion'): d[i, j - 1].price + 1,
-                Edit((s[j], w[i]), 'substitution'): d[i - 1, j - 1].price + cost,
-                Edit((), 'transposition'): d[k - 1, l - 1].price + (i - k - 1) + 1 + (j - l - 1)
+            possible_edits = {
+                Edit(('-', w[i - 1]), 'deletion'): Distance(d[i - 1, j].price + 1,
+                                                            d[i - 1, j].edits + [Edit(('-', w[i - 1]), 'deletion')]),
+                Edit((s[j - 1], '-'), 'insertion'): Distance(d[i, j - 1].price + 1,
+                                                             d[i, j - 1].edits + [Edit((s[j - 1], '-'), 'insertion')]),
+                Edit((s[j - 1], w[i - 1]), 'substitution'): Distance(d[i - 1, j - 1].price + cost,
+                                                                     d[i - 1, j - 1].edits + [
+                                                                         Edit((s[j - 1], w[i - 1]), 'substitution')]),
+                Edit((), 'transposition'): Distance(d[k - 1, l - 1].price + (i - k - 1) + 1 + (j - l - 1),
+                                                    d[i - 2, j - 2].edits + [
+                                                        Edit((s[j - 2] + s[j - 1], w[i - 2] + w[i - 1]),
+                                                             'transposition')])
             }
-            best_edit = min(possible_edits_prices.iterkeys(), lambda e: possible_edits_prices[e])
-            print best_edit
-            d[(i, j)] = Distance(possible_edits_prices[best_edit], [])
+            best_edit = min(possible_edits.iterkeys(), key=lambda e: possible_edits[e].price)
+            d[(i, j)] = possible_edits[best_edit]
 
-        da[w[i - 1]] = i
+            da[w[i - 1]] = i
 
-    nice_print_d(d)
     return d[(len(w), len(s))]
 
 
