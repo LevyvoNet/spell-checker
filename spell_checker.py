@@ -1,5 +1,6 @@
 import itertools
-from collections import namedtuple, defaultdict
+import operator
+from collections import namedtuple
 from numpy import log
 
 ALPHABET = 'abcdefghijklmnopqrstuvwxyz'
@@ -22,40 +23,24 @@ class Distance(namedtuple('Distance', ['price', 'edits'], verbose=False)):
         return str(self)
 
 
-def learn_language_model(files, n=3, lm=None):
-    """ Returns a nested dictionary of the language model based on the
-    specified files.Text normalization is expected (please explain your choice
-    of normalization HERE in the function docstring.
-    Example of the returned dictionary for the text 'w1 w2 w3 w1 w4' with a
-    tri-gram model:
-    tri-grams:
-    <> <> w1
-    <> w1 w2
-    w1 w2 w3
-    w2 w3 w1
-    w3 w1 w4
-    w1 w4 <>
-    w4 <> <>
-    and returned language model is:
-    {
-    w1: {'':1, 'w2 w3':1},
-    w2: {w1:1},
-    w3: {'w1 w2':1},
-    w4:{'w3 w1':1},
-    '': {'w1 w4':1, 'w4':1}
-    }
+def prior_unigram(can, word_counts):
+    return float(word_counts[can]) / len(word_counts.keys())
 
-    Args:
-     	  files (list): a list of files (full path) to process.
-          n (int): length of ngram, default 3.
-          lm (dict): update and return this dictionary if not None.
-                     (default None).
 
-    Returns:
-        dict: a nested dict {str:{str:int}} of ngrams and their counts.
-    """
+def channel(edit, word_counts, errors_dist):
+    default_channel_value = 1 / len(word_counts)
+    return errors_dist[edit.type].get(edit.error, default_channel_value)
 
-    return ngrams
+
+def channel_multi_edits(edits, word_counts, errors_dist):
+    return reduce(lambda x, y: x * y, [channel(edit, word_counts, errors_dist) for edit in edits], 1)
+
+
+def prior_multigram(word, history, lm):
+    history_and_word = history + [word]
+    history_and_word_count = get_partial_kgram_count(history_and_word, lm)
+    history_count = get_partial_kgram_count(history, lm)
+    return float(history_and_word_count) / history_count
 
 
 def get_string_count(word_count):
@@ -88,6 +73,12 @@ def get_error_count(errors_file):
 
     The structure is the same as the confusion matrix representation. Means {err_type: dict} err_type
     is in ['deletion', 'insertion', 'substitution', 'transposition'] and dict is {(corr,err): count}
+
+    Args:
+        errors_file (str): full path to the errors file. File format mathces
+                            Wikipedia errors list.
+    Returns:
+        dict. the count for each of the errors appear on the errors file.
     """
     # Smooth the error count using laplace correction.
     error_count = {'deletion': {(x + y, x): 1 for x, y in itertools.permutations(ALPHABET, 2)},
@@ -120,7 +111,7 @@ def create_error_distribution(errors_file, lexicon):
     where tuple is (err, corr) and the float is the probability of such an error. Examples of such tuples are ('t', 's'), ('-', 't') and ('ac','ca').
     Notes:
         1. The error distributions could be represented in more efficient ways.
-           We ask you to keep it simpel and straight forward for clarity.
+           We ask you to keep it simple and straight forward for clarity.
         2. Ultimately, one can use only 'deletion' and 'insertion' and have
             'sunstiturion' and 'transposition' derived. Again,  we use all
             four explicitly in order to keep things simple.
@@ -258,27 +249,93 @@ def correct_word(w, word_counts, errors_dist):
     Returns:
         The most probable correction (str).
     """
-    default_channel_value = 1 / len(word_counts)
-
-    def prior(can):
-        return float(word_counts[can]) / len(word_counts.keys())
-
-    def channel(edit):
-        return errors_dist[edit.type].get(edit.error, default_channel_value)
-
-    def channel_multi_edits(edits):
-        return reduce(lambda x, y: x * y, [channel(edit) for edit in edits], 1)
 
     def candidate_score(can, edits):
-        return log(prior(can)) + log(channel_multi_edits(edits))
+        return log(prior_unigram(can, word_counts)) + \
+               log(channel_multi_edits(edits, word_counts, errors_dist))
 
-    candidates_score = {
+    candidates_scores = {
         can: candidate_score(can, edits)
         for can, edits in itertools.izip(*generate_candidates(w, word_counts.iterkeys()))
     }
-    print candidates_score
 
-    return max(candidates_score.iterkeys(), key=lambda c: candidates_score[c])
+    return max(candidates_scores.iterkeys(), key=lambda c: candidates_scores[c])
+
+
+def learn_language_model(files, n=3, lm=None):
+    """ Returns a nested dictionary of the language model based on the
+    specified files.Text normalization is expected (please explain your choice
+    of normalization HERE in the function docstring.
+    Example of the returned dictionary for the text 'w1 w2 w3 w1 w4' with a
+    tri-gram model:
+    tri-grams:
+    <> <> w1
+    <> w1 w2
+    w1 w2 w3
+    w2 w3 w1
+    w3 w1 w4
+    w1 w4 <>
+    w4 <> <>
+    and returned language model is:
+    {
+    w1: {'':1, 'w2 w3':1},
+    w2: {w1:1},
+    w3: {'w1 w2':1},
+    w4:{'w3 w1':1},
+    '': {'w1 w4':1, 'w4':1}
+    }
+
+    Args:
+     	  files (list): a list of files (full path) to process.
+          n (int): length of ngram, default 3.
+          lm (dict): update and return this dictionary if not None.
+                     (default None).
+
+    Returns:
+        dict: a nested dict {str:{str:int}} of ngrams and their counts.
+    """
+
+    raise NotImplementedError
+
+
+def cut_kgram(kgram, n):
+    """Return gram which is at most length of given n.
+
+    Args:
+        kgram(list): represents a kgram which can be longer than n.
+        n(int):
+    """
+    ret = []
+    for i in reversed(range(len(kgram))):
+        if len(ret) == n:
+            break
+
+        ret.insert(0, kgram[i])
+
+    return ret
+
+
+def evaluate_text(s, n, lm):
+    """ Returns the likelihood of the specified sentence to be generated by the
+    the specified language model.
+
+    Args:
+        s (str): the sentence to evaluate.
+        n (int): the length of the n-grams to consider in the language model.
+        lm (dict): the language model to evaluate the sentence by.
+
+    Returns:
+        The likelihood of the sentence according to the language model (float).
+    """
+    s_words = s.split(' ')
+    log_likelihood = 0
+    for i in range(len(s_words)):
+        word = s[i]
+        word_history = cut_kgram(s[:i], n)
+        word_prob = prior_multigram(word, word_history, lm)
+        log_likelihood += log(word_prob)
+
+    return log_likelihood
 
 
 def generate_text(lm, m=15, w=None):
@@ -293,6 +350,88 @@ def generate_text(lm, m=15, w=None):
     Returns:
         A sequrnce of generated tokens, separated by white spaces (str)
     """
+    raise NotImplementedError
+
+
+def get_word_count_from_language_model(lm):
+    raise NotImplementedError
+
+
+def get_partial_kgram_count(kgram, lm):
+    """Get the total count of ngrams with kgram prefix.
+
+    Args:
+        kgram(list): a partial gram which is a prefix of multiple ngrams
+            in the language model - a list of strings.
+        lm(dict): the language model as described.
+    """
+    sub_language_model = reduce(operator.getitem, kgram, lm)
+    if isinstance(sub_language_model, int):
+        return sub_language_model
+
+    return sum([get_partial_kgram_count(kgram + next_word)
+                for next_word in sub_language_model.iterkeys()])
+
+
+def correct_word_in_sentence(s, lm, err_dist, word_index, alpha):
+    """Correct specific word in a sentence.
+
+    Args:
+        s (str): the sentence to correct.
+        lm (dict): the language model to correct the sentence accordingly.
+        err_dist (dict): error distributions according to error types
+                        (as returned by create_error_distribution() ).
+        word_index (int): the word index to correct
+        alpha (float): the likelihood of a lexical entry to be the a correct word.
+                        (default: 0.95)
+
+    Returns:
+        str. the sentence with the specified word replaced by the best one
+            according to the given errors distributions and language model.
+    """
+    word_counts = get_word_count_from_language_model(lm)
+    sentence_words = s.split[' ']
+    history = sentence_words[:word_index]
+
+    def candidate_score(can, edits):
+        return log(prior_multigram(can, history, lm)) + \
+               log(channel_multi_edits(edits, word_counts, err_dist))
+
+    word_to_correct = sentence_words[word_index]
+    candidates = generate_candidates(word_to_correct, word_counts.iterkeys())
+    candidates_scores = {
+        can: candidate_score(can, edits)
+        for can, edits in itertools.izip(*candidates)
+    }
+
+    new_word = max(candidates_scores.iterkeys(), key=lambda c: candidates_scores[c])
+    new_sentence_words = history + [new_word] + sentence_words[word_index + 1:]
+    return ' '.join(new_sentence_words)
+
+
+def correct_multiple_words_in_sentence(s, lm, err_dist, word_indices, alpha):
+    """Correct specific word in a sentence.
+
+    Note: the current implementation is not prune to cases where it is the best to switch
+        multiple words on the 'same time' since it corrects word after word and not multiple
+        words at once.
+
+    Args:
+        s (str): the sentence to correct.
+        lm (dict): the language model to correct the sentence accordingly.
+        err_dist (dict): error distributions according to error types
+                        (as returned by create_error_distribution() ).
+        word_indices (list): list of word indices to correct
+        alpha (float): the likelihood of a lexical entry to be the a correct word.
+                        (default: 0.95)
+
+    Returns:
+        str. the sentence with the specified words replaced by the best one
+            according to the given errors distributions and language model.
+    """
+    return reduce(lambda sen, i:
+                  correct_word_in_sentence(sen, lm, err_dist, i, alpha), word_indices,
+                  s)
 
 
 def correct_sentence(s, lm, err_dist, c=2, alpha=0.95):
@@ -313,17 +452,11 @@ def correct_sentence(s, lm, err_dist, c=2, alpha=0.95):
         The most probable sentence (str)
 
     """
+    indices_to_replace = itertools.combinations(len(s) - 1)
+    candidate_sentences_scores = {}
+    for indices in indices_to_replace:
+        new_sentence = correct_multiple_words_in_sentence(s, lm, err_dist, indices, alpha)
+        candidate_sentences_scores[new_sentence] = evaluate_text(s, n, lm)
 
-
-def evaluate_text(s, n, lm):
-    """ Returns the likelihood of the specified sentence to be generated by the
-    the specified language model.
-
-    Args:
-        s (str): the sentence to evaluate.
-        n (int): the length of the n-grams to consider in the language model.
-        lm (dict): the language model to evaluate the sentence by.
-
-    Returns:
-        The likelihood of the sentence according to the language model (float).
-    """
+    return max(candidate_sentences_scores.iterkeys(),
+               key=lambda c: candidate_sentences_scores[c])
