@@ -19,9 +19,16 @@ class SpellCheckerTest(unittest.TestCase):
                 self.assertTrue(prob <= 1, 'There is {} prob in the confusion matrix'.format(prob))
 
     def test_correct_word(self):
-        correct_abou = spell_checker.correct_word('abou', WORDS, ERR_DIST)
-        self.assertEqual(correct_abou, 'about',
-                         'expected abou->about, got {} instead'.format(correct_abou))
+        err_to_word = {
+            'abou': 'about',
+            'aboux': 'about',
+            'helo': 'hello',
+            'heloe': 'hello'
+        }
+        for err, word in err_to_word.iteritems():
+            correction = spell_checker.correct_word('abou', WORDS, ERR_DIST)
+            self.assertEqual(correction, word,
+                             'expected {}->{}, got {} instead'.format(err, word, correction))
 
 
 if __name__ == '__main__':

@@ -258,12 +258,13 @@ def correct_word(w, word_counts, errors_dist):
     Returns:
         The most probable correction (str).
     """
+    default_channel_value = 1 / len(word_counts)
 
     def prior(can):
         return float(word_counts[can]) / len(word_counts.keys())
 
     def channel(edit):
-        return errors_dist[edit.type][edit.error]
+        return errors_dist[edit.type].get(edit.error, default_channel_value)
 
     def channel_multi_edits(edits):
         return reduce(lambda x, y: x * y, [channel(edit) for edit in edits], 1)
