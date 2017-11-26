@@ -1,13 +1,16 @@
 import itertools
 import operator
-from collections import namedtuple
+import re
+import collections
 from numpy import log
 
 ALPHABET = 'abcdefghijklmnopqrstuvwxyz'
 EMPTY_CHAR = '~'
+SENTENCE_START = '<S>'
+SENTENCE_END = '</S>'
 
 
-class Edit(namedtuple('Edit', ['error', 'type'], verbose=False)):
+class Edit(collections.namedtuple('Edit', ['error', 'type'], verbose=False)):
     def __str__(self):
         return '{}, {}'.format(self.error, self.type)
 
@@ -15,7 +18,7 @@ class Edit(namedtuple('Edit', ['error', 'type'], verbose=False)):
         return str(self)
 
 
-class Distance(namedtuple('Distance', ['price', 'edits'], verbose=False)):
+class Distance(collections.namedtuple('Distance', ['price', 'edits'], verbose=False)):
     def __str__(self):
         return '({},{})'.format(self.price, self.edits)
 
@@ -24,19 +27,56 @@ class Distance(namedtuple('Distance', ['price', 'edits'], verbose=False)):
 
 
 def prior_unigram(can, word_counts):
-    return float(word_counts[can]) / len(word_counts.keys())
+    """Calculate the prior of a word using a simple unigram language model.
+
+    Use laplace smoothing for the calculation.
+    Args:
+        can(str): word.
+        word_counts(dict): map from words to their counts in the language model.
+    """
+    return float(word_counts.get(can, 0) + 1) / (2 * len(word_counts.keys()))
 
 
 def channel(edit, word_counts, errors_dist):
+    """Return the channel part - the probability of a given edit.
+
+    Args:
+        edit(Edit): tuple represents an edit (e.g (('x','y'),'substitution).
+        word_counts(dict): histogram of words counts.
+        error_dist (dict): the errors distribution.
+
+    Returns:
+        float. the channel value for an edit.
+    """
     default_channel_value = 1 / len(word_counts)
     return errors_dist[edit.type].get(edit.error, default_channel_value)
 
 
 def channel_multi_edits(edits, word_counts, errors_dist):
+    """Calculate the channel of multiple edits under the assumption they are independent.
+
+    Args:
+        edits(list): list of tuples represents an edit (e.g (('x','y'),'substitution).
+        word_counts(dict): histogram of words counts.
+        error_dist (dict): the errors distribution.
+
+    Returns:
+        float. the channel value for multiple edits.
+    """
     return reduce(lambda x, y: x * y, [channel(edit, word_counts, errors_dist) for edit in edits], 1)
 
 
 def prior_multigram(word, history, lm):
+    """Calculate the prior part of a word using some multigram language model.
+
+    Args:
+        word(string): a word.
+        history(list): the prefix of the word in a context (list of strings).
+        lm(dict): the multigram language model.
+
+    Returns:
+        float. the prior of the given word.
+    """
     history_and_word = history + [word]
     history_and_word_count = get_partial_kgram_count(history_and_word, lm)
     history_count = get_partial_kgram_count(history, lm)
@@ -137,9 +177,9 @@ def create_error_distribution(errors_file, lexicon):
     for err_type, type_count in errors_count.iteritems():
         for err, err_count in type_count.iteritems():
             original_string = err[0]
-            # Here we are using laplace smoothing for string appearances.
+            # smoothing for strings which do not appear in corpus.
             error_distribution[err_type][err] = \
-                float(err_count) / (string_count.get(original_string, 0) + 1)
+                float(err_count + 1) / (string_count.get(original_string, 0) + 1)
 
     return error_distribution
 
@@ -255,11 +295,46 @@ def correct_word(w, word_counts, errors_dist):
                log(channel_multi_edits(edits, word_counts, errors_dist))
 
     candidates_scores = {
-        can: candidate_score(can, edits)
-        for can, edits in itertools.izip(*generate_candidates(w, word_counts.iterkeys()))
+        can: candidate_score(can, errors)
+        for can, errors in itertools.izip(*generate_candidates(w, word_counts.iterkeys()))
     }
-
     return max(candidates_scores.iterkeys(), key=lambda c: candidates_scores[c])
+
+
+def normalize_text(text):
+    """Return text in a normalized form"""
+    text = text.lower()
+    chars_to_remove = ['\n', '\r', '\t', '"']
+    return reduce(lambda s, char: s.replace(char, ''), chars_to_remove, text)
+
+
+def extract_sentences(text):
+    """Extract sentences from a text.
+
+    Args:
+        text(string).
+
+    Returns:
+        list. a list of strings represents sentences appeared in the given text.
+    """
+    return [s.lstrip().replace(',', '') for s in re.split('\.', text)]
+
+
+def get_word_counts(files):
+    """Return a simple unigram language model which just count word appearances.
+
+    Args:
+        files(list): a list of files path which contains texts.
+
+    Returns:
+        dict. histogram of word counts.
+    """
+    ret = {}
+    for file in files:
+        with open(file) as f:
+            ret.update(collections.Counter(re.findall(r'\w+', f.read().lower())))
+
+    return ret
 
 
 def learn_language_model(files, n=3, lm=None):
@@ -294,6 +369,13 @@ def learn_language_model(files, n=3, lm=None):
     Returns:
         dict: a nested dict {str:{str:int}} of ngrams and their counts.
     """
+    if n == 1:
+        return get_word_counts(files)
+
+    ngrams = {}
+    for file in files:
+        with open(file) as f:
+            sentences = extract_sentences(normalize_text(f.read()))
 
     raise NotImplementedError
 

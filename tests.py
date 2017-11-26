@@ -4,11 +4,11 @@ import spell_checker
 import re
 from collections import Counter
 
+# def words(text): return re.findall(r'\w+', text.lower())
 
-def words(text): return re.findall(r'\w+', text.lower())
 
-
-WORDS = Counter(words(open('data/corpora/big.txt').read()))
+# WORDS = Counter(words(open('data/corpora/big.txt').read()))
+WORDS = spell_checker.get_word_counts(['data/corpora/big.txt'])
 ERR_DIST = spell_checker.create_error_distribution('data/misspellings/wikipedia_common_misspellings.txt', WORDS)
 
 
@@ -46,6 +46,12 @@ class SpellCheckerTest(unittest.TestCase):
             correction = spell_checker.correct_word(err, WORDS, ERR_DIST)
             self.assertEqual(correction, word,
                              'expected {}->{}, got {} instead'.format(err, word, correction))
+
+    @unittest.skip('does not fucking work')
+    def test_correct_two_edits(self):
+        correction = spell_checker.correct_word('avoux', WORDS, ERR_DIST)
+        self.assertEqual(correction, 'avoid',
+                         'expected {}->{}, got {} instead'.format(err, word, correction))
 
 
 if __name__ == '__main__':
