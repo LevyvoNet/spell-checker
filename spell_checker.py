@@ -302,10 +302,15 @@ def correct_word(w, word_counts, errors_dist):
 
 
 def normalize_text(text):
-    """Return text in a normalized form"""
+    """Return text in a normalized form."""
     text = text.lower()
     chars_to_remove = ['\n', '\r', '\t', '"']
-    return reduce(lambda s, char: s.replace(char, ''), chars_to_remove, text)
+    chars_to_convert_to_word = ['!', '?']
+    text_after_remove_chars = reduce(lambda s, char: s.replace(char, ''),
+                                     chars_to_remove, text)
+
+    return reduce(lambda s, char: s.replace(char, ' ' + char),
+                  chars_to_convert_to_word, text_after_remove_chars)
 
 
 def extract_sentences(text):
@@ -335,6 +340,36 @@ def get_word_counts(files):
             ret.update(collections.Counter(re.findall(r'\w+', f.read().lower())))
 
     return ret
+
+
+def add_ngram_to_ngrams_count(ngram, ngrams_count):
+    """Add ngram to a given ngrams count.
+
+    Args:
+        sentence(str): a list of words represents a sentence.
+        ngrams_count(dict): count of ngrams.
+    """
+    if len(ngram) == 1:
+        last_word = ngram[0]
+        ngrams_count[last_word] = ngrams_count.get(last_word, 0) + 1
+    else:
+        word = ngram[0]
+        if word not in ngrams_count:
+            ngrams_count[word] = dict()
+
+        add_ngram_to_ngrams_count(ngram[1:], ngrams_count[word])
+
+
+def generate_ngrams_from_sentence(sentence, n):
+    """Generate ngrams of length n from sentence.
+
+    Args:
+        sentence(str): sentence.
+        n(int): the length of each ngram.
+    """
+    sentence_words = sentence.split(' ')
+    return [sentence_words[i:i + n]
+            for i in range(len(sentence_words) - n + 1)]
 
 
 def learn_language_model(files, n=3, lm=None):
@@ -372,12 +407,18 @@ def learn_language_model(files, n=3, lm=None):
     if n == 1:
         return get_word_counts(files)
 
-    ngrams = {}
+    language_model = {}
     for file in files:
         with open(file) as f:
             sentences = extract_sentences(normalize_text(f.read()))
+            for sentence in sentences:
+                for ngram in generate_ngrams_from_sentence(sentence, n):
+                    add_ngram_to_ngrams_count(ngram, language_model)
 
-    raise NotImplementedError
+    if lm is not None:
+        lm.update(language_model)
+
+    return language_model
 
 
 def cut_kgram(kgram, n):
@@ -435,7 +476,7 @@ def generate_text(lm, m=15, w=None):
     raise NotImplementedError
 
 
-def get_word_count_from_language_model(lm):
+def get_lexicon_from_language_model(lm):
     raise NotImplementedError
 
 
@@ -451,7 +492,7 @@ def get_partial_kgram_count(kgram, lm):
     if isinstance(sub_language_model, int):
         return sub_language_model
 
-    return sum([get_partial_kgram_count(kgram + next_word)
+    return sum([get_partial_kgram_count(kgram + [next_word], lm)
                 for next_word in sub_language_model.iterkeys()])
 
 
@@ -471,8 +512,8 @@ def correct_word_in_sentence(s, lm, err_dist, word_index, alpha):
         str. the sentence with the specified word replaced by the best one
             according to the given errors distributions and language model.
     """
-    word_counts = get_word_count_from_language_model(lm)
-    sentence_words = s.split[' ']
+    word_counts = get_lexicon_from_language_model(lm)
+    sentence_words = s.split(' ')
     history = sentence_words[:word_index]
 
     def candidate_score(can, edits):
@@ -534,11 +575,12 @@ def correct_sentence(s, lm, err_dist, c=2, alpha=0.95):
         The most probable sentence (str)
 
     """
-    indices_to_replace = itertools.combinations(len(s) - 1)
+    words = s.split(' ')
+    indices_to_replace = itertools.combinations(range(len(words) - 1), c)
     candidate_sentences_scores = {}
     for indices in indices_to_replace:
         new_sentence = correct_multiple_words_in_sentence(s, lm, err_dist, indices, alpha)
-        candidate_sentences_scores[new_sentence] = evaluate_text(s, n, lm)
+        candidate_sentences_scores[new_sentence] = evaluate_text(s, 2, lm)
 
     return max(candidate_sentences_scores.iterkeys(),
-               key=lambda c: candidate_sentences_scores[c])
+               key=lambda can: candidate_sentences_scores[can])
