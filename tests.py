@@ -68,6 +68,15 @@ class SpellCheckerTest(unittest.TestCase):
         self.assertEqual(spell_checker.get_counts_word_in_context('w2', ['w1'], example_lm), 1)
         self.assertEqual(spell_checker.get_counts_word_in_context('w1', ['w3'], example_lm), 1)
 
+    def test_correct_sentence(self):
+        self.assertEqual(spell_checker.correct_sentence("I would be in te room",
+                                                        lm, ERR_DIST, 1, 0.8),
+                         "i would be in the room")
+
+        self.assertEqual(spell_checker.correct_sentence("go te the prison",
+                                                        lm, ERR_DIST, 1, 0.8),
+                         "go to the prison")
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)
