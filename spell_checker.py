@@ -6,8 +6,6 @@ from numpy import log
 
 ALPHABET = 'abcdefghijklmnopqrstuvwxyz'
 EMPTY_CHAR = '~'
-SENTENCE_START = '<S>'
-SENTENCE_END = '</S>'
 
 
 class Edit(collections.namedtuple('Edit', ['error', 'type'], verbose=False)):
@@ -37,50 +35,87 @@ def prior_unigram(can, word_counts):
     return float(word_counts.get(can, 0) + 1) / (2 * len(word_counts.keys()))
 
 
-def channel(edit, word_counts, errors_dist):
+def channel(edit, lexicon, errors_dist):
     """Return the channel part - the probability of a given edit.
 
     Args:
         edit(Edit): tuple represents an edit (e.g (('x','y'),'substitution).
-        word_counts(dict): histogram of words counts.
+        lexicon(dict): iterable structure contains all of the words in the language.
         error_dist (dict): the errors distribution.
 
     Returns:
         float. the channel value for an edit.
     """
-    default_channel_value = 1 / len(word_counts)
+    # TODO: think about a different smoothing - this is 0...
+    default_channel_value = 1 / len(lexicon)
     return errors_dist[edit.type].get(edit.error, default_channel_value)
 
 
-def channel_multi_edits(edits, word_counts, errors_dist):
+def channel_multi_edits(edits, lexicon, errors_dist):
     """Calculate the channel of multiple edits under the assumption they are independent.
 
     Args:
         edits(list): list of tuples represents an edit (e.g (('x','y'),'substitution).
-        word_counts(dict): histogram of words counts.
+        lexicon(dict): iterable structure contains all of the words in the language.
         error_dist (dict): the errors distribution.
 
     Returns:
         float. the channel value for multiple edits.
     """
-    return reduce(lambda x, y: x * y, [channel(edit, word_counts, errors_dist) for edit in edits], 1)
+    return reduce(lambda x, y: x * y, [channel(edit, lexicon, errors_dist) for edit in edits], 1)
 
 
-def prior_multigram(word, history, lm):
+def get_counts_word_in_context(word, context, lm):
+    """Return counts of word in a given context.
+
+    Args:
+        word(string): a word.
+        context(list): the prefix of the word in a context (list of strings).
+        lm(dict): the multigram language model.
+    """
+    total = 0
+    for super_context in lm[word]:
+        super_context_words = super_context.split(' ')
+        valid = True
+        for i in range(len(context)):
+            valid = valid and super_context_words[::-1][i] == context[::-1][i]
+
+        if valid:
+            total += lm[word][super_context]
+
+    return total
+
+    # return sum([
+    #     lm[word][super_context]
+    #     for super_context in lm[word] if (super_context).endswith(' '.join(context).strip())
+    # ])
+
+
+def word_in_context_probability(word, context, lm):
     """Calculate the prior part of a word using some multigram language model.
 
     Args:
         word(string): a word.
-        history(list): the prefix of the word in a context (list of strings).
+        context(list): the prefix of the word in a context (list of strings).
+            the length of context is n-1 for an n-gram model.
         lm(dict): the multigram language model.
 
     Returns:
         float. the prior of the given word.
     """
-    history_and_word = history + [word]
-    history_and_word_count = get_partial_kgram_count(history_and_word, lm)
-    history_count = get_partial_kgram_count(history, lm)
-    return float(history_and_word_count) / history_count
+    # TODO: what if word in not in lm? what if context is not in lm[word]?
+    try:
+        count_word_in_context = get_counts_word_in_context(word, context, lm)
+        count_context = get_counts_word_in_context(context[-1], context[:-1], lm)
+        return float(count_word_in_context) / count_context
+    except:
+        return 0
+
+
+def prior_multigram(word, context, lm):
+    """Calculate the prior part using a multigram language model and backoff smoothing."""
+    return sum([word_in_context_probability(word, context[i:], lm)
+                for i in range(len(context))]) / len(context)
 
 
 def get_string_count(word_count):
@@ -265,7 +300,7 @@ def generate_candidates(misspelled_word, lexicon):
     candidates, errors = [], []
     for can in lexicon:
         edit_distance, edits = optimal_string_alignment(can, misspelled_word)
-        if edit_distance <= 2:
+        if edit_distance <= 2 and can != '':
             candidates.append(can)
             # avoid appending "empty" substitutions (e.g ('a', 'a'))
             real_errors = [edit for edit in edits if edit.error[0] != edit.error[1]]
@@ -303,10 +338,11 @@ def correct_word(w, word_counts, errors_dist):
 
 def normalize_text(text):
     """Return text in a normalized form."""
+    # TODO: there is still some funky 'words' here - hadnle it.
     text = text.lower()
-    chars_to_remove = ['\n', '\r', '\t', '"']
+    chars_to_remove = ['\n', '\r', '\t']
     chars_to_convert_to_word = ['!', '?']
-    text_after_remove_chars = reduce(lambda s, char: s.replace(char, ''),
+    text_after_remove_chars = reduce(lambda s, char: s.replace(char, ' '),
                                      chars_to_remove, text)
 
     return reduce(lambda s, char: s.replace(char, ' ' + char),
@@ -322,7 +358,8 @@ def extract_sentences(text):
     Returns:
         list. a list of strings represents sentences appeared in the given text.
     """
-    return [s.lstrip().replace(',', '') for s in re.split('\.', text)]
+    return [s.lstrip().replace(',', '').replace('"', '')
+            for s in re.split('\.', text)]
 
 
 def get_word_counts(files):
@@ -420,23 +457,6 @@ def learn_language_model(files, n=3, lm=None):
     return language_model
 
 
-def cut_kgram(kgram, n):
-    """Return gram which is at most length of given n.
-
-    Args:
-        kgram(list): represents a kgram which can be longer than n.
-        n(int):
-    """
-    ret = []
-    for i in reversed(range(len(kgram))):
-        if len(ret) == n:
-            break
-
-        ret.insert(0, kgram[i])
-
-    return ret
-
-
 def evaluate_text(s, n, lm):
     """ Returns the likelihood of the specified sentence to be generated by the
     the specified language model.
@@ -449,13 +469,14 @@ def evaluate_text(s, n, lm):
     Returns:
         The likelihood of the sentence according to the language model (float).
     """
-    s_words = s.split(' ')
+    s = normalize_text(s)
+    s = [''] * (n - 1) + s.split(' ') + [''] * (n - 1)
     log_likelihood = 0
-    for i in range(len(s_words)):
-        word = s[i]
-        word_history = cut_kgram(s[:i], n)
-        word_prob = prior_multigram(word, word_history, lm)
-        log_likelihood += log(word_prob)
+    for i in range(len(s) - 2 * (n - 1)):
+        word = s[i + n - 1]
+        context = s[i:i + n - 1]
+        # print 'word: {}, context: {}, score:{}'.format(word, context, prior_multigram(word, context, lm))
+        log_likelihood += prior_multigram(word, context, lm)
 
     return log_likelihood
 
@@ -472,34 +493,16 @@ def generate_text(lm, m=15, w=None):
     Returns:
         A sequrnce of generated tokens, separated by white spaces (str)
     """
+    # TODO: implement this.
+    print 'not implemented function!'
     raise NotImplementedError
 
 
-def get_lexicon_from_language_model(lm):
-    raise NotImplementedError
-
-
-def get_partial_kgram_count(kgram, lm):
-    """Get the total count of ngrams with kgram prefix.
-
-    Args:
-        kgram(list): a partial gram which is a prefix of multiple ngrams
-            in the language model - a list of strings.
-        lm(dict): the language model as described.
-    """
-    sub_language_model = reduce(operator.getitem, kgram, lm)
-    if isinstance(sub_language_model, int):
-        return sub_language_model
-
-    return sum([get_partial_kgram_count(kgram + [next_word], lm)
-                for next_word in sub_language_model.iterkeys()])
-
-
-def correct_word_in_sentence(s, lm, err_dist, word_index, alpha):
+def correct_word_in_sentence(sentence_words, lm, err_dist, word_index, alpha):
     """Correct specific word in a sentence.
 
     Args:
-        s (str): the sentence to correct.
+        sentence_words (list): the sentence to correct (list of strings).
         lm (dict): the language model to correct the sentence accordingly.
         err_dist (dict): error distributions according to error types
                         (as returned by create_error_distribution() ).
@@ -511,27 +514,32 @@ def correct_word_in_sentence(s, lm, err_dist, word_index, alpha):
         str. the sentence with the specified word replaced by the best one
             according to the given errors distributions and language model.
     """
-    word_counts = get_lexicon_from_language_model(lm)
-    sentence_words = s.split(' ')
-    history = sentence_words[:word_index]
+
+    lexicon = lm.keys()
+    # This is a sentence so we are starting with an empty string.
+    context = sentence_words[:word_index]
 
     def candidate_score(can, edits):
-        return log(prior_multigram(can, history, lm)) + \
-               log(channel_multi_edits(edits, word_counts, err_dist))
+        return log(prior_multigram(can, context, lm)) + \
+               log(channel_multi_edits(edits, lexicon, err_dist))
 
     word_to_correct = sentence_words[word_index]
-    candidates = generate_candidates(word_to_correct, word_counts.iterkeys())
+    candidates = generate_candidates(word_to_correct, lexicon)
+    # for some reason this spell checker really love deleting words
+    if '' in candidates:
+        candidates.remove('')
+
     candidates_scores = {
         can: candidate_score(can, edits)
         for can, edits in itertools.izip(*candidates)
     }
 
     new_word = max(candidates_scores.iterkeys(), key=lambda c: candidates_scores[c])
-    new_sentence_words = history + [new_word] + sentence_words[word_index + 1:]
-    return ' '.join(new_sentence_words)
+    new_sentence_words = context + [new_word] + sentence_words[word_index + 1:]
+    return ' '.join(new_sentence_words).strip()
 
 
-def correct_multiple_words_in_sentence(s, lm, err_dist, word_indices, alpha):
+def correct_multiple_words_in_sentence(sentence_words, lm, err_dist, word_indices, alpha):
     """Correct specific word in a sentence.
 
     Note: the current implementation is not prune to cases where it is the best to switch
@@ -539,7 +547,7 @@ def correct_multiple_words_in_sentence(s, lm, err_dist, word_indices, alpha):
         words at once.
 
     Args:
-        s (str): the sentence to correct.
+        sentence_words (list): the sentence to correct (list of strings).
         lm (dict): the language model to correct the sentence accordingly.
         err_dist (dict): error distributions according to error types
                         (as returned by create_error_distribution() ).
@@ -553,7 +561,7 @@ def correct_multiple_words_in_sentence(s, lm, err_dist, word_indices, alpha):
     """
     return reduce(lambda sen, i:
                   correct_word_in_sentence(sen, lm, err_dist, i, alpha), word_indices,
-                  s)
+                  sentence_words)
 
 
 def correct_sentence(s, lm, err_dist, c=2, alpha=0.95):
@@ -574,12 +582,18 @@ def correct_sentence(s, lm, err_dist, c=2, alpha=0.95):
         The most probable sentence (str)
 
     """
-    words = s.split(' ')
-    indices_to_replace = itertools.combinations(range(len(words) - 1), c)
+    s = normalize_text(s)
+    # This is a sentence an empty string at the start is required.
+    sentence_words = [''] + s.split(' ')
+    indices_to_replace = itertools.combinations(range(1, len(sentence_words)), c)
     candidate_sentences_scores = {}
     for indices in indices_to_replace:
-        new_sentence = correct_multiple_words_in_sentence(s, lm, err_dist, indices, alpha)
-        candidate_sentences_scores[new_sentence] = evaluate_text(s, 2, lm)
+        new_sentence = correct_multiple_words_in_sentence(
+            sentence_words, lm, err_dist, indices, alpha)
+
+        candidate_sentences_scores[new_sentence] = evaluate_text(new_sentence, 3, lm)
+        print 'suggested sentence is: {}, score: {}'.format(new_sentence,
+                                                            candidate_sentences_scores[new_sentence])
 
     return max(candidate_sentences_scores.iterkeys(),
                key=lambda can: candidate_sentences_scores[can])

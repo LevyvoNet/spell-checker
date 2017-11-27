@@ -3,6 +3,7 @@ import spell_checker
 
 WORDS = spell_checker.get_word_counts(['data/corpora/big.txt'])
 ERR_DIST = spell_checker.create_error_distribution('data/misspellings/wikipedia_common_misspellings.txt', WORDS)
+lm = spell_checker.learn_language_model(['data/corpora/big.txt'])
 
 
 class SpellCheckerTest(unittest.TestCase):
@@ -48,11 +49,24 @@ class SpellCheckerTest(unittest.TestCase):
                          'expected {}->{}, got {} instead'.format(err, word, correction))
 
     def test_language_model(self):
-        lm = spell_checker.learn_language_model(['../tester_module/sh.txt'])
-        import ipdb
-        ipdb.set_trace()
-        correction = spell_checker.correct_sentence("I dould be in he room", lm, ERR_DIST, 2, 0.8)
-        self.assertEqual(correction, "I would be in the room")
+        """w1 w2 w3 w1 w4"""
+        example_lm = spell_checker.learn_language_model(['../example.txt'], 3, None)
+        self.assertDictEqual(
+            example_lm,
+            {
+                'w1': {'': 1, 'w2 w3': 1},
+                'w2': {'w1': 1},
+                'w3': {'w1 w2': 1},
+                'w4': {'w3 w1': 1},
+                '': {'w1 w4': 1, 'w4': 1}
+            }
+        )
+
+        self.assertEqual(spell_checker.get_counts_word_in_context('w1', ['w2', 'w3'], example_lm), 1)
+        self.assertEqual(spell_checker.get_counts_word_in_context('w1', ['2', 'w3'], example_lm), 0)
+        self.assertEqual(spell_checker.get_counts_word_in_context('w1', [''], example_lm), 1)
+        self.assertEqual(spell_checker.get_counts_word_in_context('w2', ['w1'], example_lm), 1)
+        self.assertEqual(spell_checker.get_counts_word_in_context('w1', ['w3'], example_lm), 1)
 
 
 if __name__ == '__main__':
