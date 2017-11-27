@@ -346,18 +346,15 @@ def add_ngram_to_ngrams_count(ngram, ngrams_count):
     """Add ngram to a given ngrams count.
 
     Args:
-        sentence(str): a list of words represents a sentence.
+        ngram(list): a list of words represents a sentence.
         ngrams_count(dict): count of ngrams.
     """
-    if len(ngram) == 1:
-        last_word = ngram[0]
-        ngrams_count[last_word] = ngrams_count.get(last_word, 0) + 1
-    else:
-        word = ngram[0]
-        if word not in ngrams_count:
-            ngrams_count[word] = dict()
+    word = ngram[-1]
+    context = ' '.join(ngram[:-1]).strip()
+    if word not in ngrams_count:
+        ngrams_count[word] = dict()
 
-        add_ngram_to_ngrams_count(ngram[1:], ngrams_count[word])
+    ngrams_count[word][context] = ngrams_count[word].get(context, 0) + 1
 
 
 def generate_ngrams_from_sentence(sentence, n):
@@ -368,6 +365,8 @@ def generate_ngrams_from_sentence(sentence, n):
         n(int): the length of each ngram.
     """
     sentence_words = sentence.split(' ')
+    # Pad the sentence with empty strings in it's begining and ending.
+    sentence_words = [''] * (n - 1) + sentence_words + [''] * (n - 1)
     return [sentence_words[i:i + n]
             for i in range(len(sentence_words) - n + 1)]
 
@@ -388,18 +387,18 @@ def learn_language_model(files, n=3, lm=None):
     w4 <> <>
     and returned language model is:
     {
-    w1: {'':1, 'w2 w3':1},
-    w2: {w1:1},
-    w3: {'w1 w2':1},
-    w4:{'w3 w1':1},
-    '': {'w1 w4':1, 'w4':1}
+    'w1': {'': 1, 'w2 w3': 1},
+    'w2': {'w1': 1},
+    'w3': {'w1 w2': 1},
+    'w4': {'w3 w1': 1},
+    '': {'w1 w4': 1, 'w4': 1}
     }
 
     Args:
-     	  files (list): a list of files (full path) to process.
-          n (int): length of ngram, default 3.
-          lm (dict): update and return this dictionary if not None.
-                     (default None).
+        files (list): a list of files (full path) to process.
+        n (int): length of ngram, default 3.
+        lm (dict): update and return this dictionary if not None.
+                   (default None).
 
     Returns:
         dict: a nested dict {str:{str:int}} of ngrams and their counts.
