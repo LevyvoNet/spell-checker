@@ -559,9 +559,15 @@ def correct_multiple_words_in_sentence(sentence_words, lm, err_dist, word_indice
         str. the sentence with the specified words replaced by the best one
             according to the given errors distributions and language model.
     """
-    return reduce(lambda sen, i:
-                  correct_word_in_sentence(sen, lm, err_dist, i, alpha), word_indices,
-                  sentence_words)
+    for word_index in word_indices:
+        sen = correct_word_in_sentence(sentence_words, lm, err_dist, word_index, alpha)
+        sen = normalize_text(sen)
+        sentence_words = [''] + sen.split(' ')
+
+    return sen
+    # return reduce(lambda sen, i:
+    #               correct_word_in_sentence(sen, lm, err_dist, i, alpha), word_indices,
+    #               sentence_words)
 
 
 def correct_sentence(s, lm, err_dist, c=2, alpha=0.95):
