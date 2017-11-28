@@ -13,6 +13,7 @@ class SpellCheckerTest(unittest.TestCase):
             for prob in table.itervalues():
                 self.assertTrue(prob <= 1, 'There is {} prob in the confusion matrix'.format(prob))
 
+    @unittest.skip('just for now')
     def test_correct_word(self):
         err_to_word = {
             'abou': 'about',
@@ -47,6 +48,7 @@ class SpellCheckerTest(unittest.TestCase):
         self.assertEqual(correction, 'avoid',
                          'expected {}->{}, got {} instead'.format(err, word, correction))
 
+    @unittest.skip('just for now')
     def test_language_model(self):
         """w1 w2 w3 w1 w4"""
         example_lm = spell_checker.learn_language_model(['../example.txt'], 3, None)
@@ -67,6 +69,7 @@ class SpellCheckerTest(unittest.TestCase):
         self.assertEqual(spell_checker.get_counts_word_in_context('w2', ['w1'], example_lm), 1)
         self.assertEqual(spell_checker.get_counts_word_in_context('w1', ['w3'], example_lm), 1)
 
+    @unittest.skip('just for now')
     def test_correct_sentence(self):
         self.assertEqual(spell_checker.correct_sentence(
             "I would be in te room", lm, ERR_DIST, 1, 0.8),
@@ -76,6 +79,10 @@ class SpellCheckerTest(unittest.TestCase):
             "go te the prison", lm, ERR_DIST, 1, 0.8),
             "go to the prison")
 
+    def test_bla(self):
+        import ipdb
+        ipdb.set_trace()
+        spell_checker.generate_text(lm, 5, 'I')
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

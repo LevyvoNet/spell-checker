@@ -338,7 +338,7 @@ def correct_word(w, word_counts, errors_dist):
 
 def normalize_text(text):
     """Return text in a normalized form."""
-    # TODO: there is still some funky 'words' here - hadnle it.
+    # TODO: there are still some funky 'words' here - hadnle it.
     text = text.lower()
     chars_to_remove = ['\n', '\r', '\t']
     chars_to_convert_to_word = ['!', '?']
@@ -409,9 +409,17 @@ def generate_ngrams_from_sentence(sentence, n):
 
 
 def learn_language_model(files, n=3, lm=None):
-    """ Returns a nested dictionary of the language model based on the
-    specified files.Text normalization is expected (please explain your choice
-    of normalization HERE in the function docstring.
+    """Return a language model based on the specified files.
+
+    Text normalization includes:
+        1. Removing all white spaces (as well as line breaks, tabs, etc.) becuase sometimes
+            sentences are splitted between several lines.
+        2. Convert all of the text to lower case for treating the word itself
+            ('food' and 'Food' is considered the same word).
+        3. Remove ',' and '"' character from the text (the simplest way to remove noise
+            which causes 'hello,' and 'hello' considered differently).
+        4. Make '!','?' characters independent words by adding a space before each instance of them.
+
     Example of the returned dictionary for the text 'w1 w2 w3 w1 w4' with a
     tri-gram model:
     tri-grams:
@@ -451,6 +459,11 @@ def learn_language_model(files, n=3, lm=None):
                 for ngram in generate_ngrams_from_sentence(sentence, n):
                     add_ngram_to_ngrams_count(ngram, language_model)
 
+    try:
+        # new sentence after new sentence is meaning-less.
+        language_model[''][''] = 0
+    except KeyError:
+        pass
     if lm is not None:
         lm.update(language_model)
 
@@ -495,24 +508,19 @@ def generate_text(lm, m=15, w=None):
     """
 
     # TODO: implement this.
-    def get_last_word_of_sentence_inside_list(sen):
-        sen_words = sen.split(' ')
-        if len(sen_words) > 0:
-            return [sen_words[-1]]
-        return []
-
     text_words = ['' if w == None else normalize_text(w)]
-    while len(' '.join(text_words).split(' ')) < m:
+    while len([word for word in text_words if word != '']) < m:
         # TODO: what if possible_words is empty? what about the empty word?
-        possible_words = reduce(lambda words, sen: words + get_last_word_of_sentence_inside_list(sen),
-                                lm[text_words[-1]].iterkeys(), [])
-        possible_words_scores = {word: word_in_context_probability(word, text_words, lm)
+        import ipdb
+        ipdb.set_trace()
+        possible_words = lm.iterkeys()
+        possible_words_scores = {word: prior_multigram(word, text_words, lm)
                                  for word in possible_words}
         best_word = max(possible_words_scores, key=lambda word: possible_words_scores[word])
         text_words.append(best_word)
         print 'current text is: {}'.format(' '.join(text_words))
 
-    return ' '.join(text_words)
+    return ' '.join([word for word in text_words if word != ''])
 
 
 def correct_word_in_sentence(sentence_words, lm, err_dist, word_index, alpha):
@@ -605,6 +613,7 @@ def correct_sentence(s, lm, err_dist, c=2, alpha=0.95):
         The most probable sentence (str)
 
     """
+    # TODO: "I love milo" -> "I love milk" and not "i love milk" (capital letter should be kept)
     # TODO: cache sentence,index combinations to improve run time.
     # TODO: use alpha.
     # TODO: prefer fixing non-words before real words.
