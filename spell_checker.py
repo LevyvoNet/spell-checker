@@ -358,8 +358,11 @@ def extract_sentences(text):
     Returns:
         list. a list of strings represents sentences appeared in the given text.
     """
-    return [s.lstrip().replace(',', '').replace('"', '')
-            for s in re.split('\.', text)]
+    chars_to_remove = [',', '"', '(', ')']
+    return [
+        reduce(lambda s, char: s.replace(char, ''), chars_to_remove, s).lstrip()
+        for s in re.split('\.', text)
+    ]
 
 
 def get_word_counts(files):
@@ -459,15 +462,27 @@ def learn_language_model(files, n=3, lm=None):
                 for ngram in generate_ngrams_from_sentence(sentence, n):
                     add_ngram_to_ngrams_count(ngram, language_model)
 
-    try:
-        # new sentence after new sentence is meaning-less.
-        language_model[''][''] = 0
-    except KeyError:
-        pass
     if lm is not None:
         lm.update(language_model)
 
     return language_model
+
+
+def capitalize_if_needed(new_sentence, original_sentence):
+    """Return the new sentence with capital letters where needed.
+
+    When correcting a sentence a normalization which includes
+    text lowering is executed. Because of that the corrected sentence
+    might miss capital letters, for example: 'I want to eat dinnar' -> 'i want to eat dinner'.
+    The purpose of this function is to convert it to 'I want to eat dinner'
+    """
+    new_sentence_words = new_sentence.split(' ')
+    original_sentence_words = original_sentence.split(' ')
+    for i in range(min(len(new_sentence_words), len(original_sentence_words))):
+        if new_sentence_words[i].lower() == original_sentence_words[i].lower():
+            new_sentence_words[i] = original_sentence_words[i]
+
+    return ' '.join(new_sentence_words)
 
 
 def evaluate_text(s, n, lm):
@@ -506,13 +521,10 @@ def generate_text(lm, m=15, w=None):
     Returns:
         A sequrnce of generated tokens, separated by white spaces (str)
     """
-
     # TODO: implement this.
     text_words = ['' if w == None else normalize_text(w)]
     while len([word for word in text_words if word != '']) < m:
         # TODO: what if possible_words is empty? what about the empty word?
-        import ipdb
-        ipdb.set_trace()
         possible_words = lm.iterkeys()
         possible_words_scores = {word: prior_multigram(word, text_words, lm)
                                  for word in possible_words}
@@ -613,10 +625,10 @@ def correct_sentence(s, lm, err_dist, c=2, alpha=0.95):
         The most probable sentence (str)
 
     """
-    # TODO: "I love milo" -> "I love milk" and not "i love milk" (capital letter should be kept)
     # TODO: cache sentence,index combinations to improve run time.
     # TODO: use alpha.
     # TODO: prefer fixing non-words before real words.
+    orig_s = s
     s = normalize_text(s)
     # This is a sentence an empty string at the start is required.
     sentence_words = [''] + s.split(' ')
@@ -631,5 +643,8 @@ def correct_sentence(s, lm, err_dist, c=2, alpha=0.95):
         print 'suggested sentence is: {}, score: {}'.format(new_sentence,
                                                             candidate_sentences_scores[new_sentence])
 
-    return max(candidate_sentences_scores.iterkeys(),
-               key=lambda can: candidate_sentences_scores[can])
+    final_sentence = max(candidate_sentences_scores.iterkeys(),
+                         key=lambda can: candidate_sentences_scores[can])
+
+    return capitalize_if_needed(final_sentence, orig_s)
+    # TODO: remove all print, ipdb and commented out code
