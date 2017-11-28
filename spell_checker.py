@@ -521,7 +521,7 @@ def generate_text(lm, m=15, w=None):
     Returns:
         A sequrnce of generated tokens, separated by white spaces (str)
     """
-    # TODO: implement this.
+    # TODO: implement this faster and probabilistic
     text_words = ['' if w == None else normalize_text(w)]
     while len([word for word in text_words if word != '']) < m:
         # TODO: what if possible_words is empty? what about the empty word?
@@ -556,18 +556,24 @@ def correct_word_in_sentence(sentence_words, lm, err_dist, word_index, alpha):
     # This is a sentence so we are starting with an empty string.
     context = sentence_words[:word_index]
 
-    def candidate_score(can, edits):
+    def channel_for_sentence(original_word, can, edits, alpha):
+        if original_word == can:
+            return alpha
+
+        return channel_multi_edits(edits, lexicon, err_dist)
+
+    def candidate_score(original_word, can, edits):
         return log(prior_multigram(can, context, lm)) + \
-               log(channel_multi_edits(edits, lexicon, err_dist))
+               log(channel_for_sentence(original_word, can, edits, alpha))
 
     word_to_correct = sentence_words[word_index]
     candidates = generate_candidates(word_to_correct, lexicon)
-    # for some reason this spell checker really love deleting words
+    # noisy language model causes words deleting
     if '' in candidates:
         candidates.remove('')
 
     candidates_scores = {
-        can: candidate_score(can, edits)
+        can: candidate_score(word_to_correct, can, edits)
         for can, edits in itertools.izip(*candidates)
     }
 
@@ -632,9 +638,10 @@ def correct_sentence(s, lm, err_dist, c=2, alpha=0.95):
     s = normalize_text(s)
     # This is a sentence an empty string at the start is required.
     sentence_words = [''] + s.split(' ')
-    indices_to_replace = itertools.combinations(range(1, len(sentence_words)), c)
+    # indices_not_in_language = [i for i in len(sentence_words) if sentence_words[i] not in lm.keys()]
+    indices_combinations = itertools.combinations(range(1, len(sentence_words)), c)
     candidate_sentences_scores = {}
-    for indices in indices_to_replace:
+    for indices in indices_combinations:
         new_sentence = correct_multiple_words_in_sentence(
             sentence_words, lm, err_dist, indices, alpha)
 
