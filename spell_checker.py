@@ -47,7 +47,7 @@ def channel(edit, lexicon, errors_dist):
         float. the channel value for an edit.
     """
     # TODO: think about a different smoothing - this is 0...
-    default_channel_value = 1 / len(lexicon)
+    default_channel_value = 1 / sum([d[err] for d in errors_dist.itervalues() for err in d])
     return errors_dist[edit.type].get(edit.error, default_channel_value)
 
 
@@ -73,6 +73,9 @@ def get_counts_word_in_context(word, context, lm):
         context(list): the prefix of the word in a context (list of strings).
         lm(dict): the multigram language model.
     """
+    if word not in lm:
+        return 0
+
     total = 0
     for super_context in lm[word]:
         super_context_words = super_context.split(' ')
@@ -84,11 +87,6 @@ def get_counts_word_in_context(word, context, lm):
             total += lm[word][super_context]
 
     return total
-
-    # return sum([
-    #     lm[word][super_context]
-    #     for super_context in lm[word] if (super_context).endswith(' '.join(context).strip())
-    # ])
 
 
 def word_in_context_probability(word, context, lm):
@@ -344,7 +342,6 @@ def correct_word(w, word_counts, errors_dist):
 
 def normalize_text(text):
     """Return text in a normalized form."""
-    # TODO: there are still some funky 'words' here - hadnle it.
     text = text.lower()
     chars_to_remove = ['\n', '\r', '\t']
     chars_to_convert_to_word = ['!', '?', '-']
@@ -650,7 +647,6 @@ def correct_sentence(s, lm, err_dist, c=2, alpha=0.95):
         new_sentence = correct_multiple_words_in_sentence(
             sentence_words, lm, err_dist, indices, alpha)
 
-        # TODO: send the real n instead of const 3.
         candidate_sentences_scores[new_sentence] = evaluate_text(new_sentence, None, lm)
         print 'suggested sentence is: {}, score: {}'.format(new_sentence,
                                                             candidate_sentences_scores[new_sentence])

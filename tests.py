@@ -13,7 +13,7 @@ class SpellCheckerTest(unittest.TestCase):
             for prob in table.itervalues():
                 self.assertTrue(prob <= 1, 'There is {} prob in the confusion matrix'.format(prob))
 
-    @unittest.skip('just for now')
+    # @unittest.skip('just for now')
     def test_correct_word(self):
         err_to_word = {
             'abou': 'about',
