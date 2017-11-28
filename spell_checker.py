@@ -341,7 +341,7 @@ def normalize_text(text):
     # TODO: there are still some funky 'words' here - hadnle it.
     text = text.lower()
     chars_to_remove = ['\n', '\r', '\t']
-    chars_to_convert_to_word = ['!', '?']
+    chars_to_convert_to_word = ['!', '?', '-']
     text_after_remove_chars = reduce(lambda s, char: s.replace(char, ' '),
                                      chars_to_remove, text)
 
@@ -358,7 +358,7 @@ def extract_sentences(text):
     Returns:
         list. a list of strings represents sentences appeared in the given text.
     """
-    chars_to_remove = [',', '"', '(', ')']
+    chars_to_remove = [',', '"', '(', ')', '_']
     return [
         reduce(lambda s, char: s.replace(char, ''), chars_to_remove, s).lstrip()
         for s in re.split('\.', text)
