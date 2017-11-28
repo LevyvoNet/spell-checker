@@ -113,7 +113,13 @@ def word_in_context_probability(word, context, lm):
 
 
 def prior_multigram(word, context, lm):
-    """Calculate the prior part using a multigram language model and backoff smoothing."""
+    """Calculate the prior part using a multigram language model and backoff smoothing.
+
+    The smoothing here is a bit tricky - the length of 'context' may change between
+        different calls (it's not limited to n of the n-gram). However, when comparing between
+        prior_multigrams the context of the candidates is always in the same length so it's OK
+        for comparison goals.
+    """
     return sum([word_in_context_probability(word, context[i:], lm)
                 for i in range(len(context))]) / len(context)
 
@@ -498,11 +504,11 @@ def evaluate_text(s, n, lm):
         The likelihood of the sentence according to the language model (float).
     """
     s = normalize_text(s)
-    s = [''] * (n - 1) + s.split(' ') + [''] * (n - 1)
+    s = [''] + s.split(' ') + ['']
     log_likelihood = 0
-    for i in range(len(s) - 2 * (n - 1)):
-        word = s[i + n - 1]
-        context = s[i:i + n - 1]
+    for i in range(len(s) - 2):
+        word = s[i + 1]
+        context = s[:i + 1]
         # print 'word: {}, context: {}, score:{}'.format(word, context, prior_multigram(word, context, lm))
         log_likelihood += prior_multigram(word, context, lm)
 
@@ -632,7 +638,6 @@ def correct_sentence(s, lm, err_dist, c=2, alpha=0.95):
 
     """
     # TODO: cache sentence,index combinations to improve run time.
-    # TODO: use alpha.
     # TODO: prefer fixing non-words before real words.
     orig_s = s
     s = normalize_text(s)
@@ -646,7 +651,7 @@ def correct_sentence(s, lm, err_dist, c=2, alpha=0.95):
             sentence_words, lm, err_dist, indices, alpha)
 
         # TODO: send the real n instead of const 3.
-        candidate_sentences_scores[new_sentence] = evaluate_text(new_sentence, 3, lm)
+        candidate_sentences_scores[new_sentence] = evaluate_text(new_sentence, None, lm)
         print 'suggested sentence is: {}, score: {}'.format(new_sentence,
                                                             candidate_sentences_scores[new_sentence])
 
