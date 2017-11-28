@@ -493,9 +493,26 @@ def generate_text(lm, m=15, w=None):
     Returns:
         A sequrnce of generated tokens, separated by white spaces (str)
     """
+
     # TODO: implement this.
-    print 'not implemented function!'
-    raise NotImplementedError
+    def get_last_word_of_sentence_inside_list(sen):
+        sen_words = sen.split(' ')
+        if len(sen_words) > 0:
+            return [sen_words[-1]]
+        return []
+
+    text_words = ['' if w == None else normalize_text(w)]
+    while len(' '.join(text_words).split(' ')) < m:
+        # TODO: what if possible_words is empty? what about the empty word?
+        possible_words = reduce(lambda words, sen: words + get_last_word_of_sentence_inside_list(sen),
+                                lm[text_words[-1]].iterkeys(), [])
+        possible_words_scores = {word: word_in_context_probability(word, text_words, lm)
+                                 for word in possible_words}
+        best_word = max(possible_words_scores, key=lambda word: possible_words_scores[word])
+        text_words.append(best_word)
+        print 'current text is: {}'.format(' '.join(text_words))
+
+    return ' '.join(text_words)
 
 
 def correct_word_in_sentence(sentence_words, lm, err_dist, word_index, alpha):
@@ -588,6 +605,9 @@ def correct_sentence(s, lm, err_dist, c=2, alpha=0.95):
         The most probable sentence (str)
 
     """
+    # TODO: cache sentence,index combinations to improve run time.
+    # TODO: use alpha.
+    # TODO: prefer fixing non-words before real words.
     s = normalize_text(s)
     # This is a sentence an empty string at the start is required.
     sentence_words = [''] + s.split(' ')
@@ -597,6 +617,7 @@ def correct_sentence(s, lm, err_dist, c=2, alpha=0.95):
         new_sentence = correct_multiple_words_in_sentence(
             sentence_words, lm, err_dist, indices, alpha)
 
+        # TODO: send the real n instead of const 3.
         candidate_sentences_scores[new_sentence] = evaluate_text(new_sentence, 3, lm)
         print 'suggested sentence is: {}, score: {}'.format(new_sentence,
                                                             candidate_sentences_scores[new_sentence])
