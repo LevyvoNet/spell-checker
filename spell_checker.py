@@ -24,12 +24,33 @@ class Distance(collections.namedtuple('Distance', ['price', 'edits'], verbose=Fa
         return str(self)
 
 
+def edits1(word):
+    """All edits that are one edit away from `word`. - Norvig's code."""
+    letters = 'abcdefghijklmnopqrstuvwxyz'
+    splits = [(word[:i], word[i:]) for i in range(len(word) + 1)]
+    deletes = [L + R[1:] for L, R in splits if R]
+    transposes = [L + R[1] + R[0] + R[2:] for L, R in splits if len(R) > 1]
+    replaces = [L + c + R[1:] for L, R in splits if R for c in letters]
+    inserts = [L + c + R for L, R in splits for c in letters]
+    return set(deletes + transposes + replaces + inserts)
+
+
+def edits2(word):
+    """All edits that are two edits away from `word`. - Norvig's code."""
+    return set(e2 for e1 in edits1(word) for e2 in edits1(e1))
+
+
+def known_words(candidates, lexicon):
+    """Return the candidates which are known words."""
+    return set(w for w in candidates if w in lexicon)
+
+
 def prior_unigram(can, word_counts):
     """Calculate the prior of a word using a simple unigram language model.
 
     Use laplace smoothing for the calculation.
     Args:
-        can(str): word.
+        can(str): word.f
         word_counts(dict): map from words to their counts in the language model.
     """
     return float(word_counts.get(can, 0) + 1) / (2 * len(word_counts.keys()))
@@ -145,7 +166,7 @@ def word_in_context_probability(word, context, n, lm):
     # TODO: what if word in not in lm? what if context is not in lm[word]?
     count_word_in_context = get_counts_word_in_context(word, context, lm)
     # number_of_contexts = unique_context_of_len_count(n - 1, n, lm)
-    count_context = get_counts_word_in_context(context[-1], context[:-1], lm)
+    count_context = get_counts_of_context(context, lm)
     number_of_contexts = 0
     if (count_context + number_of_contexts) == 0:
         return 0
@@ -334,7 +355,7 @@ def generate_candidates(misspelled_word, lexicon):
 
     Args:
         misspelled_word(string): the misspelled word.
-        lexicon(list): list contains all of the words.
+        lexicon(iterable): list contains all of the words.
 
     Returns:
         tuple. (candidates, edits) tuples contains the
@@ -342,7 +363,10 @@ def generate_candidates(misspelled_word, lexicon):
             (list of tuples represents edits).
     """
     candidates, errors = [], []
-    for can in lexicon:
+    e1 = edits1(misspelled_word)
+    e2 = edits2(misspelled_word)
+    all_edits = e1.union(e2)
+    for can in known_words(all_edits, lexicon):
         edit_distance, edits = optimal_string_alignment(can, misspelled_word)
         if edit_distance <= 2 and can != '':
             candidates.append(can)
@@ -353,11 +377,11 @@ def generate_candidates(misspelled_word, lexicon):
     return candidates, errors
 
 
-def correct_word(w, word_counts, errors_dist):
+def correct_word(word, word_counts, errors_dist):
     """ Returns the most probable correction for the specified word, given the specified prior error distribution.
 
     Args:
-        w (str): a word to correct
+        word (str): a word to correct
         word_counts (dict): a dictionary of {str:count} containing the
                             counts  of uniqie words (from previously loaded
                              corpora).
@@ -375,8 +399,11 @@ def correct_word(w, word_counts, errors_dist):
 
     candidates_scores = {
         can: candidate_score(can, errors)
-        for can, errors in itertools.izip(*generate_candidates(w, word_counts.iterkeys()))
+        for can, errors in itertools.izip(*generate_candidates(word, word_counts.keys()))
     }
+    if len(candidates_scores) == 0:
+        import ipdb
+        ipdb.set_trace()
     return max(candidates_scores.iterkeys(), key=lambda c: candidates_scores[c])
 
 
@@ -417,10 +444,14 @@ def get_word_counts(files):
     Returns:
         dict. histogram of word counts.
     """
-    ret = {}
+
+    def words(text):
+        return re.findall(r'\w+', text.lower())
+
+    ret = collections.Counter()
     for file in files:
         with open(file) as f:
-            ret.update(collections.Counter(re.findall(r'\w+', f.read().lower())))
+            ret.update(collections.Counter(words(f.read())))
 
     return ret
 
