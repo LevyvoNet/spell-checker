@@ -1,5 +1,5 @@
 import itertools
-import operator
+import random
 import re
 import collections
 from numpy import log
@@ -41,12 +41,11 @@ def channel(edit, lexicon, errors_dist):
     Args:
         edit(Edit): tuple represents an edit (e.g (('x','y'),'substitution).
         lexicon(dict): iterable structure contains all of the words in the language.
-        error_dist (dict): the errors distribution.
+        errors_dist (dict): the errors distribution.
 
     Returns:
         float. the channel value for an edit.
     """
-    # TODO: think about a different smoothing - this is 0...
     default_channel_value = 1 / sum([d[err] for d in errors_dist.itervalues() for err in d])
     return errors_dist[edit.type].get(edit.error, default_channel_value)
 
@@ -77,54 +76,95 @@ def get_counts_word_in_context(word, context, lm):
         return 0
 
     total = 0
+    context = ' '.join(context).strip().split(' ')
     for super_context in lm[word]:
         super_context_words = super_context.split(' ')
         valid = True
-        for i in range(len(context)):
-            valid = valid and super_context_words[::-1][i] == context[::-1][i]
+        if len(super_context_words) >= len(context):
+            for i in range(len(context)):
+                valid = valid and super_context_words[::-1][i] == context[::-1][i]
 
-        if valid:
-            total += lm[word][super_context]
+            if valid:
+                total += lm[word][super_context]
 
     return total
 
 
-def word_in_context_probability(word, context, lm):
-    """Calculate the prior part of a word using some multigram language model.
+def get_n_from_language_model(lm):
+    return max(len(context.split(' ')) for context in lm['']) + 1
+
+
+def unique_context_of_len_count(length, n, lm):
+    if length == 0:
+        return 1
+    if length == 1:
+        return len(lm.keys())
+
+    n_grams = []
+    for w in lm:
+        for context in lm[w]:
+            context_padded = (n - 1 - len(' '.join(context.split(' ')))) * [''] + context.split(' ')
+            if len(context_padded) != n - 1:
+                import ipdb
+                ipdb.set_trace()
+            n_grams.append(' '.join(context_padded[-(length - 1):] + [w]))
+
+    return len(set(n_grams))
+
+
+def get_counts_of_context(context, lm):
+    context = ' '.join(context).strip().split(' ')
+    total = 0
+    for word in lm:
+        for other_context in lm[word]:
+            other_context_words = other_context.split(' ')
+            valid = True
+            if len(other_context_words) >= len(context):
+                for i in range(len(context)):
+                    valid = valid and other_context_words[::-1][i] == context[::-1][i]
+
+                if valid:
+                    total += lm[word][other_context]
+
+    return total
+
+
+def word_in_context_probability(word, context, n, lm):
+    """Calculate the probability of a word appearing in a context.
 
     Args:
         word(string): a word.
         context(list): the prefix of the word in a context (list of strings).
             the length of context is n-1 for an n-gram model.
+        n(int): n of the n-gram model.
         lm(dict): the multigram language model.
 
     Returns:
         float. the prior of the given word.
     """
     # TODO: what if word in not in lm? what if context is not in lm[word]?
-    try:
-        count_word_in_context = get_counts_word_in_context(word, context, lm)
-        count_context = get_counts_word_in_context(context[-1], context[:-1], lm)
-        return float(count_word_in_context) / count_context
-    except:
+    count_word_in_context = get_counts_word_in_context(word, context, lm)
+    # number_of_contexts = unique_context_of_len_count(n - 1, n, lm)
+    count_context = get_counts_word_in_context(context[-1], context[:-1], lm)
+    number_of_contexts = 0
+    if (count_context + number_of_contexts) == 0:
         return 0
+    ret = float(count_word_in_context) / (count_context + number_of_contexts)
+    return ret
 
 
-def prior_multigram(word, context, lm):
-    """Calculate the prior part using a multigram language model and backoff smoothing.
+def prior_multigram(word, context, n, lm):
+    """Calculate the prior part using a multigram language model and backoff smoothing."""
+    return word_in_context_probability(word, context, n, lm)
 
-    The smoothing here is a bit tricky - the length of 'context' may change between
-        different calls (it's not limited to n of the n-gram). However, when comparing between
-        prior_multigrams the context of the candidates is always in the same length so it's OK
-        for comparison goals.
-    """
-    return sum([word_in_context_probability(word, context[i:], lm)
-                for i in range(len(context))]) / len(context)
+    #     sum += word_in_context_probability(word, context_padded, lm)
+    # return sum([word_in_context_probability(word, context[i:], lm)
+    #             for i in range(len(context))]) / n - 1
 
 
 def get_string_count(word_count):
     """Return count of strings at the size of 1,2 in word_count
-    
+
     We are going to use this in order to create the error distribution (this is the denominator).
 
     Args:
@@ -344,7 +384,7 @@ def normalize_text(text):
     """Return text in a normalized form."""
     text = text.lower()
     chars_to_remove = ['\n', '\r', '\t']
-    chars_to_convert_to_word = ['!', '?', '-']
+    chars_to_convert_to_word = ['!', '?', '-', '_']
     text_after_remove_chars = reduce(lambda s, char: s.replace(char, ' '),
                                      chars_to_remove, text)
 
@@ -361,7 +401,7 @@ def extract_sentences(text):
     Returns:
         list. a list of strings represents sentences appeared in the given text.
     """
-    chars_to_remove = [',', '"', '(', ')', '_']
+    chars_to_remove = [',', '"', '(', ')', '_', '-']
     return [
         reduce(lambda s, char: s.replace(char, ''), chars_to_remove, s).lstrip()
         for s in re.split('\.', text)
@@ -396,6 +436,10 @@ def add_ngram_to_ngrams_count(ngram, ngrams_count):
     context = ' '.join(ngram[:-1]).strip()
     if word not in ngrams_count:
         ngrams_count[word] = dict()
+
+    if word == '' and context == '':
+        # This is meaning less and just noise.
+        return
 
     ngrams_count[word][context] = ngrams_count[word].get(context, 0) + 1
 
@@ -501,15 +545,26 @@ def evaluate_text(s, n, lm):
         The likelihood of the sentence according to the language model (float).
     """
     s = normalize_text(s)
-    s = [''] + s.split(' ') + ['']
+    s = [''] * (n - 1) + s.split(' ') + [''] * (n - 1)
     log_likelihood = 0
-    for i in range(len(s) - 2):
-        word = s[i + 1]
-        context = s[:i + 1]
+    for i in range(len(s) - 2 * (n - 1)):
+        word = s[i + n - 1]
+        context = s[i:i + n - 1]
         # print 'word: {}, context: {}, score:{}'.format(word, context, prior_multigram(word, context, lm))
-        log_likelihood += prior_multigram(word, context, lm)
+        log_likelihood += prior_multigram(word, context, n, lm)
 
     return log_likelihood
+
+
+def weighted_choice(choices):
+    total = sum(choices[c] for c in choices.iterkeys())
+    r = random.uniform(0, total)
+    upto = 0
+    for c in choices:
+        if upto + choices[c] >= r:
+            return c
+        upto += choices[c]
+    assert False, "Shouldn't get here"
 
 
 def generate_text(lm, m=15, w=None):
@@ -529,10 +584,16 @@ def generate_text(lm, m=15, w=None):
     while len([word for word in text_words if word != '']) < m:
         # TODO: what if possible_words is empty? what about the empty word?
         possible_words = lm.iterkeys()
-        possible_words_scores = {word: prior_multigram(word, text_words, lm)
+        n = get_n_from_language_model(lm)
+        if len(text_words) < n - 1:
+            text_last_words = text_words
+        else:
+            text_last_words = text_words[-(n - 1):]
+        possible_words_scores = {word: prior_multigram(word, text_last_words, n, lm)
                                  for word in possible_words}
-        best_word = max(possible_words_scores, key=lambda word: possible_words_scores[word])
-        text_words.append(best_word)
+
+        chosen_word = weighted_choice(possible_words_scores)
+        text_words.append(chosen_word)
         print 'current text is: {}'.format(' '.join(text_words))
 
     return ' '.join([word for word in text_words if word != ''])
@@ -556,8 +617,16 @@ def correct_word_in_sentence(sentence_words, lm, err_dist, word_index, alpha):
     """
 
     lexicon = lm.keys()
-    # This is a sentence so we are starting with an empty string.
     context = sentence_words[:word_index]
+    n = get_n_from_language_model(lm)
+    if len(context) < n - 1:
+        context_last_words = context
+    else:
+        context_last_words = context[-(n - 1):]
+
+    if context_last_words == []:
+        import ipdb
+        ipdb.set_trace()
 
     def channel_for_sentence(original_word, can, edits, alpha):
         if original_word == can:
@@ -566,14 +635,11 @@ def correct_word_in_sentence(sentence_words, lm, err_dist, word_index, alpha):
         return channel_multi_edits(edits, lexicon, err_dist)
 
     def candidate_score(original_word, can, edits):
-        return log(prior_multigram(can, context, lm)) + \
+        return log(prior_multigram(can, context_last_words, n, lm)) + \
                log(channel_for_sentence(original_word, can, edits, alpha))
 
     word_to_correct = sentence_words[word_index]
     candidates = generate_candidates(word_to_correct, lexicon)
-    # noisy language model causes words deleting
-    if '' in candidates:
-        candidates.remove('')
 
     candidates_scores = {
         can: candidate_score(word_to_correct, can, edits)
@@ -636,6 +702,7 @@ def correct_sentence(s, lm, err_dist, c=2, alpha=0.95):
     """
     # TODO: cache sentence,index combinations to improve run time.
     # TODO: prefer fixing non-words before real words.
+    n = get_n_from_language_model(lm)
     orig_s = s
     s = normalize_text(s)
     # This is a sentence an empty string at the start is required.
@@ -647,7 +714,7 @@ def correct_sentence(s, lm, err_dist, c=2, alpha=0.95):
         new_sentence = correct_multiple_words_in_sentence(
             sentence_words, lm, err_dist, indices, alpha)
 
-        candidate_sentences_scores[new_sentence] = evaluate_text(new_sentence, None, lm)
+        candidate_sentences_scores[new_sentence] = evaluate_text(new_sentence, n, lm)
         print 'suggested sentence is: {}, score: {}'.format(new_sentence,
                                                             candidate_sentences_scores[new_sentence])
 
