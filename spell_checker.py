@@ -595,7 +595,6 @@ def weighted_choice(choices):
         if upto + choices[c] >= r:
             return c
         upto += choices[c]
-    assert False, "Shouldn't get here"
 
 
 def generate_text(lm, m=15, w=None):
@@ -614,7 +613,9 @@ def generate_text(lm, m=15, w=None):
     text_words = ['' if w == None else normalize_text(w)]
     while len([word for word in text_words if word != '']) < m:
         # TODO: what if possible_words is empty? what about the empty word?
-        possible_words = lm.iterkeys()
+        lexicon = lm.keys()
+        random.shuffle(lexicon)
+        possible_words = lexicon
         n = get_n_from_language_model(lm)
         if len(text_words) < n - 1:
             text_last_words = text_words

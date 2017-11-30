@@ -89,10 +89,14 @@ class SpellCheckerTest(unittest.TestCase):
             "Go to the prison")
 
     def test_correct_sentence_real_word(self):
-        def test_correct_sentence(self):
-            self.assertEqual(spell_checker.correct_sentence(
-                "I would be in he room", lm, ERR_DIST, 2, 0.8),
-                "I would be in the room")
+        self.assertEqual(spell_checker.correct_sentence(
+            "I would be in he room", lm, ERR_DIST, 1, 0.8),
+            "I would be in her room")
+
+    def test_correct_sentence_two_non_words(self):
+        self.assertEqual(spell_checker.correct_sentence(
+            "I hav to goe", lm, ERR_DIST, 2, 0.8),
+            "I have to go")
 
     @unittest.skip('just for now')
     def test_get_n_from_language_model(self):
