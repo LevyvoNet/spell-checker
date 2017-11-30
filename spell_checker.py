@@ -609,7 +609,7 @@ def generate_text(lm, m=15, w=None):
     Returns:
         A sequrnce of generated tokens, separated by white spaces (str)
     """
-    # TODO: implement this faster and probabilistic
+    # TODO: make this run faster
     text_words = ['' if w == None else normalize_text(w)]
     while len([word for word in text_words if word != '']) < m:
         # TODO: what if possible_words is empty? what about the empty word?
@@ -623,6 +623,8 @@ def generate_text(lm, m=15, w=None):
             text_last_words = text_words[-(n - 1):]
         possible_words_scores = {word: prior_multigram(word, text_last_words, n, lm)
                                  for word in possible_words}
+        if '' in possible_words_scores:
+            del possible_words_scores['']
 
         chosen_word = weighted_choice(possible_words_scores)
         text_words.append(chosen_word)
