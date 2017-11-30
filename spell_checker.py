@@ -493,7 +493,7 @@ def learn_language_model(files, n=3, lm=None):
     """Return a language model based on the specified files.
 
     Text normalization includes:
-        1. Removing all white spaces (as well as line breaks, tabs, etc.) becuase sometimes
+        1. Removing all white spaces (as well as line breaks, tabs, etc.) because sometimes
             sentences are splitted between several lines.
         2. Convert all of the text to lower case for treating the word itself
             ('food' and 'Food' is considered the same word).
@@ -612,7 +612,6 @@ def generate_text(lm, m=15, w=None):
     # TODO: make this run faster
     text_words = ['' if w == None else normalize_text(w)]
     while len([word for word in text_words if word != '']) < m:
-        # TODO: what if possible_words is empty? what about the empty word?
         lexicon = lm.keys()
         random.shuffle(lexicon)
         possible_words = lexicon
