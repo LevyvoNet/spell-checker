@@ -27,7 +27,7 @@ def learn_stupid_text(func):
 
 
 class SpellCheckerTest(unittest.TestCase):
-    @unittest.skip('just for now')
+    # @unittest.skip('just for now')
     def test_correct_word(self):
         err_to_word = {
             'abou': 'about',
@@ -58,7 +58,14 @@ class SpellCheckerTest(unittest.TestCase):
             self.assertEqual(correction, word,
                              'expected {}->{}, got {} instead'.format(err, word, correction))
 
-    @unittest.skip('just for now')
+    def test_correct_word_two_errors(self):
+        err_to_word = {'parlleament': 'parliament'}
+        for err, word in err_to_word.iteritems():
+            correction = spell_checker.correct_word(err, WORDS, ERR_DIST)
+            self.assertEqual(correction, word,
+                             'expected {}->{}, got {} instead'.format(err, word, correction))
+
+    # @unittest.skip('just for now')
     def test_language_model(self):
         """w1 w2 w3 w1 w4"""
         example_lm = spell_checker.learn_language_model(['../example.txt'], 3, None)
@@ -88,19 +95,19 @@ class SpellCheckerTest(unittest.TestCase):
             "Go te the prison", lm, ERR_DIST, 1, 0.8),
             "Go to the prison")
 
-    @unittest.skip('just for now')
+    # @unittest.skip('just for now')
     def test_correct_sentence_real_word(self):
         self.assertEqual(spell_checker.correct_sentence(
             "I would be in he room", lm, ERR_DIST, 1, 0.8),
             "I would be in her room")
 
-    @unittest.skip('just for now')
+    # @unittest.skip('just for now')
     def test_correct_sentence_two_non_words(self):
         self.assertEqual(spell_checker.correct_sentence(
             "I hav to goe", lm, ERR_DIST, 2, 0.8),
             "I have to go")
 
-    @unittest.skip('just for now')
+    # @unittest.skip('just for now')
     def test_get_n_from_language_model(self):
         lm_2 = spell_checker.learn_language_model(['data/corpora/big.txt'], 2, None)
         lm_3 = spell_checker.learn_language_model(['data/corpora/big.txt'], 3, None)
@@ -109,7 +116,7 @@ class SpellCheckerTest(unittest.TestCase):
         self.assertEqual(spell_checker.get_n_from_language_model(lm_3), 3)
         self.assertEqual(spell_checker.get_n_from_language_model(lm_4), 4)
 
-    @unittest.skip('just for now')
+    # @unittest.skip('just for now')
     @learn_stupid_text
     def test_count_word_in_context(self, test_lm):
         self.assertEqual(spell_checker.get_count_word_in_context('elad', ['is'], test_lm), 1)
@@ -123,10 +130,16 @@ class SpellCheckerTest(unittest.TestCase):
         self.assertEqual(spell_checker.get_count_word_in_context('', ['is', 'elad'], test_lm), 1)
         self.assertEqual(spell_checker.get_count_word_in_context('love', ['', 'i'], test_lm), 1)
 
-    @unittest.skip('just for now')
+    # @unittest.skip('just for now')
     @learn_stupid_text
     def test_get_counts_of_context(self, test_lm):
         self.assertEqual(spell_checker.get_count_of_context(['my', 'name'], test_lm), 1)
+
+    # @unittest.skip('just for now')
+    @learn_stupid_text
+    def test_get_unique_context_count(self, test_lm):
+        self.assertEqual(spell_checker.unique_context_of_len_count(3, test_lm), 11)
+        self.assertEqual(spell_checker.unique_context_of_len_count(2, test_lm), 14)
 
 
 if __name__ == '__main__':
