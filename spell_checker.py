@@ -1,3 +1,25 @@
+"""
+A basic spell checker and corrector.
+
+For the unigram language model a simple Laplace smoothing was used because it is simple
+and fits well to a unigram model.
+
+For the n-gram language model Add-K smoothing was used. Simple laplace was doing very bad,
+causing my correct_sentence function to make mistakes which did not occur when no smoothing was
+performed. The model was working quite well so my goal was to deal with all kinds of
+zeros(non-word, new contexts) with minimum effect on the language model. Using Add-K smoothing
+I could do so in a simple way.
+
+Text normalization includes:
+    1. Removing all white spaces (as well as line breaks, tabs, etc.) because sometimes
+        sentences are splitted between several lines.
+    2. Convert all of the text to lower case for treating the word itself
+        ('food' and 'Food' is considered the same word).
+    3. Remove ',' and '"' character from the text (the simplest way to remove noise
+        which causes 'hello,' and 'hello' considered differently).
+    4. Make '!','?' characters independent words by adding a space before each instance of them.
+"""
+
 import itertools
 import random
 import re
@@ -218,7 +240,7 @@ def get_error_count(errors_file):
     Returns:
         dict. the count for each of the errors appear on the errors file.
     """
-    # Smooth the error count using laplace correction.
+    # Smooth the error count.
     error_count = {'deletion': {(x + y, x): 1 for x, y in itertools.permutations(ALPHABET, 2)},
                    'insertion': {(x, x + y): 1 for x, y in itertools.permutations(ALPHABET, 2)},
                    'substitution': {(x, y): 1 for x, y in itertools.permutations(ALPHABET, 2)},
@@ -275,7 +297,6 @@ def create_error_distribution(errors_file, lexicon):
     for err_type, type_count in errors_count.iteritems():
         for err, err_count in type_count.iteritems():
             original_string = err[0]
-            # smoothing for strings which do not appear in corpus.
             error_distribution[err_type][err] = \
                 float(err_count + 1) / (string_count.get(original_string, 0) + 1)
 
