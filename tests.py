@@ -79,7 +79,7 @@ class SpellCheckerTest(unittest.TestCase):
         self.assertEqual(spell_checker.get_counts_word_in_context('w2', ['w1'], example_lm), 1)
         self.assertEqual(spell_checker.get_counts_word_in_context('w1', ['w3'], example_lm), 1)
 
-    # @unittest.skip('just for now')
+    @unittest.skip('just for now')
     def test_correct_sentence(self):
         self.assertEqual(spell_checker.correct_sentence(
             "I would be in te room", lm, ERR_DIST, 1, 0.8),
@@ -87,6 +87,12 @@ class SpellCheckerTest(unittest.TestCase):
         self.assertEqual(spell_checker.correct_sentence(
             "Go te the prison", lm, ERR_DIST, 1, 0.8),
             "Go to the prison")
+
+    def test_correct_sentence_real_word(self):
+        def test_correct_sentence(self):
+            self.assertEqual(spell_checker.correct_sentence(
+                "I would be in he room", lm, ERR_DIST, 2, 0.8),
+                "I would be in the room")
 
     @unittest.skip('just for now')
     def test_get_n_from_language_model(self):

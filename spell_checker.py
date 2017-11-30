@@ -166,7 +166,7 @@ def word_in_context_probability(word, context, n, lm):
     # TODO: what if word in not in lm? what if context is not in lm[word]?
     count_word_in_context = get_counts_word_in_context(word, context, lm)
     # number_of_contexts = unique_context_of_len_count(n - 1, n, lm)
-    count_context = get_counts_of_context(context, lm)
+    count_context = get_counts_word_in_context(context[-1], context[:-1], lm)
     number_of_contexts = 0
     if (count_context + number_of_contexts) == 0:
         return 0
@@ -713,6 +713,23 @@ def correct_multiple_words_in_sentence(sentence_words, lm, err_dist, word_indice
     #               sentence_words)
 
 
+def correct_sentence_from_indices_combinations(s, lm, err_dist, indices_combinations, n, alpha):
+    s = normalize_text(s)
+    # This is a sentence an empty string at the start is required.
+    sentence_words = [''] + s.split(' ')
+    candidate_sentences_scores = {}
+    for indices in indices_combinations:
+        new_sentence = correct_multiple_words_in_sentence(
+            sentence_words, lm, err_dist, indices, alpha)
+
+        candidate_sentences_scores[new_sentence] = evaluate_text(new_sentence, n, lm)
+        print 'suggested sentence is: {}, score: {}'.format(new_sentence,
+                                                            candidate_sentences_scores[new_sentence])
+
+    return max(candidate_sentences_scores.iterkeys(),
+               key=lambda can: candidate_sentences_scores[can])
+
+
 def correct_sentence(s, lm, err_dist, c=2, alpha=0.95):
     """ Returns the most probable sentence given the specified sentence, language
     model, error distributions, maximal number of suumed erroneous tokens and likelihood for non-error.
@@ -732,25 +749,33 @@ def correct_sentence(s, lm, err_dist, c=2, alpha=0.95):
 
     """
     # TODO: cache sentence,index combinations to improve run time.
-    # TODO: prefer fixing non-words before real words.
     n = get_n_from_language_model(lm)
     orig_s = s
     s = normalize_text(s)
     # This is a sentence an empty string at the start is required.
     sentence_words = [''] + s.split(' ')
-    # indices_not_in_language = [i for i in len(sentence_words) if sentence_words[i] not in lm.keys()]
-    indices_combinations = itertools.combinations(range(1, len(sentence_words)), c)
-    candidate_sentences_scores = {}
-    for indices in indices_combinations:
-        new_sentence = correct_multiple_words_in_sentence(
-            sentence_words, lm, err_dist, indices, alpha)
+    non_word_indices = [i
+                        for i in range(len(sentence_words))
+                        if sentence_words[i] not in lm]
 
-        candidate_sentences_scores[new_sentence] = evaluate_text(new_sentence, n, lm)
-        print 'suggested sentence is: {}, score: {}'.format(new_sentence,
-                                                            candidate_sentences_scores[new_sentence])
+    non_word_indices_combinations = itertools.combinations(non_word_indices, c)
+    if len(non_word_indices) > 0:
+        sentence_after_non_words_correction = \
+            correct_sentence_from_indices_combinations(s, lm, err_dist,
+                                                       non_word_indices_combinations,
+                                                       n, alpha)
+    else:
+        sentence_after_non_words_correction = s
 
-    final_sentence = max(candidate_sentences_scores.iterkeys(),
-                         key=lambda can: candidate_sentences_scores[can])
+    if len(non_word_indices) >= c:
+        return capitalize_if_needed(sentence_after_non_words_correction, orig_s)
 
-    return capitalize_if_needed(final_sentence, orig_s)
+    new_sen_words = [''] + sentence_after_non_words_correction.split(' ')
+    indices_combinations = itertools.combinations(range(1, len(new_sen_words)),
+                                                  c - len(non_word_indices))
+    return capitalize_if_needed(
+        correct_sentence_from_indices_combinations(
+            sentence_after_non_words_correction,
+            lm, err_dist, indices_combinations,
+            n, alpha), orig_s)
     # TODO: remove all print, ipdb and commented out code
