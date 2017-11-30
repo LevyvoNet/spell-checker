@@ -601,7 +601,6 @@ def generate_text(lm, m=15, w=None):
     Returns:
         A sequrnce of generated tokens, separated by white spaces (str)
     """
-    # TODO: make this run faster
     n = get_n_from_language_model(lm)
     v = unique_context_of_len_count(n - 1, lm)
     text_words = ['' if w == None else normalize_text(w)]
@@ -624,7 +623,6 @@ def generate_text(lm, m=15, w=None):
 
         chosen_word = weighted_choice(possible_words_scores)
         text_words.append(chosen_word)
-        print '{}'.format(' '.join(text_words))
 
     return ' '.join([word for word in text_words if word != ''])
 
@@ -722,8 +720,6 @@ def correct_sentence_from_indices_combinations(s, lm, err_dist, indices_combinat
             sentence_words, lm, err_dist, indices, alpha, v)
 
         candidate_sentences_scores[new_sentence] = evaluate_text(new_sentence, n, lm)
-        print 'suggested sentence is: {}, score: {}'.format(new_sentence,
-                                                            candidate_sentences_scores[new_sentence])
 
     return max(candidate_sentences_scores.iterkeys(),
                key=lambda can: candidate_sentences_scores[can])
@@ -747,7 +743,6 @@ def correct_sentence(s, lm, err_dist, c=2, alpha=0.95):
         The most probable sentence (str)
 
     """
-    # TODO: when c is bigger than needed sometimes a bad sentence is generated.
     n = get_n_from_language_model(lm)
     v = unique_context_of_len_count(n - 1, lm)
     orig_s = s
@@ -778,4 +773,3 @@ def correct_sentence(s, lm, err_dist, c=2, alpha=0.95):
             sentence_after_non_words_correction,
             lm, err_dist, indices_combinations,
             n, alpha, v), orig_s)
-    # TODO: remove all print, ipdb and commented out code
