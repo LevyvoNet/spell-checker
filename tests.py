@@ -73,13 +73,13 @@ class SpellCheckerTest(unittest.TestCase):
             }
         )
 
-        self.assertEqual(spell_checker.get_counts_word_in_context('w1', ['w2', 'w3'], example_lm), 1)
-        self.assertEqual(spell_checker.get_counts_word_in_context('w1', ['2', 'w3'], example_lm), 0)
-        self.assertEqual(spell_checker.get_counts_word_in_context('w1', [''], example_lm), 1)
-        self.assertEqual(spell_checker.get_counts_word_in_context('w2', ['w1'], example_lm), 1)
-        self.assertEqual(spell_checker.get_counts_word_in_context('w1', ['w3'], example_lm), 1)
+        self.assertEqual(spell_checker.get_count_word_in_context('w1', ['w2', 'w3'], example_lm), 1)
+        self.assertEqual(spell_checker.get_count_word_in_context('w1', ['2', 'w3'], example_lm), 0)
+        self.assertEqual(spell_checker.get_count_word_in_context('w1', [''], example_lm), 1)
+        self.assertEqual(spell_checker.get_count_word_in_context('w2', ['w1'], example_lm), 1)
+        self.assertEqual(spell_checker.get_count_word_in_context('w1', ['w3'], example_lm), 1)
 
-    @unittest.skip('just for now')
+    # @unittest.skip('just for now')
     def test_correct_sentence(self):
         self.assertEqual(spell_checker.correct_sentence(
             "I would be in te room", lm, ERR_DIST, 1, 0.8),
@@ -88,11 +88,13 @@ class SpellCheckerTest(unittest.TestCase):
             "Go te the prison", lm, ERR_DIST, 1, 0.8),
             "Go to the prison")
 
+    @unittest.skip('just for now')
     def test_correct_sentence_real_word(self):
         self.assertEqual(spell_checker.correct_sentence(
             "I would be in he room", lm, ERR_DIST, 1, 0.8),
             "I would be in her room")
 
+    @unittest.skip('just for now')
     def test_correct_sentence_two_non_words(self):
         self.assertEqual(spell_checker.correct_sentence(
             "I hav to goe", lm, ERR_DIST, 2, 0.8),
@@ -110,21 +112,21 @@ class SpellCheckerTest(unittest.TestCase):
     @unittest.skip('just for now')
     @learn_stupid_text
     def test_count_word_in_context(self, test_lm):
-        self.assertEqual(spell_checker.get_counts_word_in_context('elad', ['is'], test_lm), 1)
-        self.assertEqual(spell_checker.get_counts_word_in_context('elad', ['name', 'is'], test_lm), 1)
-        self.assertEqual(spell_checker.get_counts_word_in_context('i', [''], test_lm), 2)
-        self.assertEqual(spell_checker.get_counts_word_in_context('you', ['wanna', 'meet'], test_lm), 0)
-        self.assertEqual(spell_checker.get_counts_word_in_context('you', ['meet'], test_lm), 1)
-        self.assertEqual(spell_checker.get_counts_word_in_context('elad', ['is'], test_lm), 1)
-        self.assertEqual(spell_checker.get_counts_word_in_context('elad', ['name', 'is'], test_lm), 1)
-        self.assertEqual(spell_checker.get_counts_word_in_context('', ['elad'], test_lm), 2)
-        self.assertEqual(spell_checker.get_counts_word_in_context('', ['is', 'elad'], test_lm), 1)
-        self.assertEqual(spell_checker.get_counts_word_in_context('love', ['', 'i'], test_lm), 1)
+        self.assertEqual(spell_checker.get_count_word_in_context('elad', ['is'], test_lm), 1)
+        self.assertEqual(spell_checker.get_count_word_in_context('elad', ['name', 'is'], test_lm), 1)
+        self.assertEqual(spell_checker.get_count_word_in_context('i', [''], test_lm), 2)
+        self.assertEqual(spell_checker.get_count_word_in_context('you', ['wanna', 'meet'], test_lm), 0)
+        self.assertEqual(spell_checker.get_count_word_in_context('you', ['meet'], test_lm), 1)
+        self.assertEqual(spell_checker.get_count_word_in_context('elad', ['is'], test_lm), 1)
+        self.assertEqual(spell_checker.get_count_word_in_context('elad', ['name', 'is'], test_lm), 1)
+        self.assertEqual(spell_checker.get_count_word_in_context('', ['elad'], test_lm), 2)
+        self.assertEqual(spell_checker.get_count_word_in_context('', ['is', 'elad'], test_lm), 1)
+        self.assertEqual(spell_checker.get_count_word_in_context('love', ['', 'i'], test_lm), 1)
 
     @unittest.skip('just for now')
     @learn_stupid_text
     def test_get_counts_of_context(self, test_lm):
-        self.assertEqual(spell_checker.get_counts_of_context(['my', 'name'], test_lm), 1)
+        self.assertEqual(spell_checker.get_count_of_context(['my', 'name'], test_lm), 1)
 
 
 if __name__ == '__main__':

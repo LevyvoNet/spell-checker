@@ -85,7 +85,7 @@ def channel_multi_edits(edits, lexicon, errors_dist):
     return reduce(lambda x, y: x * y, [channel(edit, lexicon, errors_dist) for edit in edits], 1)
 
 
-def get_counts_word_in_context(word, context, lm):
+def get_count_word_in_context(word, context, lm):
     """Return counts of word in a given context.
 
     Args:
@@ -133,7 +133,7 @@ def unique_context_of_len_count(length, n, lm):
     return len(set(n_grams))
 
 
-def get_counts_of_context(context, lm):
+def get_count_of_context(context, lm):
     context = ' '.join(context).strip().split(' ')
     total = 0
     for word in lm:
@@ -164,9 +164,10 @@ def word_in_context_probability(word, context, n, lm):
         float. the prior of the given word.
     """
     # TODO: what if word in not in lm? what if context is not in lm[word]?
-    count_word_in_context = get_counts_word_in_context(word, context, lm)
+    count_word_in_context = get_count_word_in_context(word, context, lm)
     # number_of_contexts = unique_context_of_len_count(n - 1, n, lm)
-    count_context = get_counts_word_in_context(context[-1], context[:-1], lm)
+    # count_context = get_count_word_in_context(context[-1], context[:-1], lm)
+    count_context = get_count_of_context(context, lm)
     number_of_contexts = 0
     if (count_context + number_of_contexts) == 0:
         return 0
@@ -582,6 +583,7 @@ def evaluate_text(s, n, lm):
         word = s[i + n - 1]
         context = s[i:i + n - 1]
         # print 'word: {}, context: {}, score:{}'.format(word, context, prior_multigram(word, context, lm))
+        # TODO: turn it to actual log
         log_likelihood += prior_multigram(word, context, n, lm)
 
     return log_likelihood
@@ -610,16 +612,21 @@ def generate_text(lm, m=15, w=None):
         A sequrnce of generated tokens, separated by white spaces (str)
     """
     # TODO: make this run faster
+    # TODO: implement function for getting less possible words (only words which have the previous word before them)
     text_words = ['' if w == None else normalize_text(w)]
     while len([word for word in text_words if word != '']) < m:
         lexicon = lm.keys()
         random.shuffle(lexicon)
-        possible_words = lexicon
         n = get_n_from_language_model(lm)
         if len(text_words) < n - 1:
             text_last_words = text_words
         else:
             text_last_words = text_words[-(n - 1):]
+
+        possible_words = [w
+                          for w in lexicon
+                          if get_count_word_in_context(w, [text_last_words[-1]], lm) > 0]
+
         possible_words_scores = {word: prior_multigram(word, text_last_words, n, lm)
                                  for word in possible_words}
         if '' in possible_words_scores:
