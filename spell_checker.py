@@ -643,6 +643,9 @@ def generate_text(lm, m=15, w=None):
             del possible_words_scores['']
 
         chosen_word = weighted_choice(possible_words_scores)
+        if chosen_word is None:
+            chosen_word = ''
+
         text_words.append(chosen_word)
 
     return ' '.join([word for word in text_words if word != ''])
