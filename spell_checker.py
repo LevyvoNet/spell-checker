@@ -777,7 +777,11 @@ def correct_sentence(s, lm, err_dist, c=2, alpha=0.95):
                         for i in range(len(sentence_words))
                         if sentence_words[i] not in lm]
 
-    non_word_indices_combinations = itertools.combinations(non_word_indices, c)
+    non_word_indices_combinations = []
+    for i in range(1, c + 1):
+        for comb in itertools.combinations(non_word_indices, i):
+            non_word_indices_combinations.append(comb)
+            # non_word_indices_combinations = itertools.combinations(non_word_indices, c)
     if len(non_word_indices) > 0:
         sentence_after_non_words_correction = \
             correct_sentence_from_indices_combinations(s, lm, err_dist,
