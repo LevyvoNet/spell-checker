@@ -1,1 +1,1 @@
-# Practicing NLP with a spell checker
+# spell checker exercise for NLP academic course
